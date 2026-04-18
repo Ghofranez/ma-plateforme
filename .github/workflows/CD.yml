@@ -76,15 +76,15 @@ jobs:
 
       - name: Build Images Locally
         run: |
-          docker build -t my-backend:latest ./backend -f ./backend/dockerfile
-          docker build -t my-frontend:latest ./frontend -f ./frontend/Dockerfile
+          docker build -t my-backend:latest ./Backend -f ./Backend/dockerfile
+          docker build -t my-frontend:latest ./Frontend -f ./Frontend/dockerfile
           docker images
 
       - name: Deploy with Docker Compose
         run: |
           echo "=== DÉBUT DU DÉPLOIEMENT ==="
-          docker compose down          # ← sans tiret
-          docker compose up -d         # ← sans tiret
+          docker compose down
+          docker compose up -d
           echo "Attente du démarrage des services..."
           sleep 20
           docker ps
@@ -234,8 +234,8 @@ jobs:
       - name: Rollback Docker Compose
         run: |
           echo "=== ROLLBACK EN COURS ==="
-          docker compose down          # ← sans tiret
-          docker compose up -d         # ← sans tiret
+          docker compose down
+          docker compose up -d         
           echo "=== ROLLBACK TERMINÉ ==="
 
       - name: Verify Rollback

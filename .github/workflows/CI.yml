@@ -48,8 +48,8 @@ jobs:
             instrumenta/conftest test \
             -p /project/policy/ \
             --namespace main \
-            /project/backend/dockerfile \
-            /project/frontend/Dockerfile
+            /project/Backend/dockerfile \
+            /project/Frontend/dockerfile
 
   # ── JOB 4 — BACKEND TESTS ────────────────────────────────
   backend-tests:
@@ -68,7 +68,7 @@ jobs:
           cd backend
           pip install -r requirements.txt
           pip install pytest pytest-cov httpx
-      - name: Run Tests          # ← chemin corrigé app/tests
+      - name: Run Tests
         run: |
           cd backend
           pytest app/tests/ -v --cov=app --cov-report=xml:coverage.xml
@@ -76,7 +76,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: backend-coverage
-          path: backend/coverage.xml
+          path: Backend/coverage.xml
 
   # ── JOB 5 — FRONTEND TESTS ───────────────────────────────
   frontend-tests:
@@ -97,7 +97,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: frontend-coverage
-          path: frontend/coverage/lcov.info
+          path: Frontend/coverage/lcov.info
 
   # ── JOB 6 — SONARCLOUD ───────────────────────────────────
   sonarcloud:
@@ -111,11 +111,11 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: backend-coverage
-          path: backend/
+          path: Backend/
       - uses: actions/download-artifact@v4
         with:
           name: frontend-coverage
-          path: frontend/coverage/
+          path: Frontend/coverage/
       - uses: SonarSource/sonarqube-scan-action@v2
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -146,8 +146,8 @@ jobs:
       - name: Build & Push Backend
         uses: docker/build-push-action@v5
         with:
-          context: ./backend
-          file: ./backend/dockerfile
+          context: ./Backend
+          file: ./Backend/dockerfile
           push: true
           tags: ${{ steps.set_images.outputs.backend }}
           cache-from: type=gha
@@ -155,8 +155,8 @@ jobs:
       - name: Build & Push Frontend
         uses: docker/build-push-action@v5
         with:
-          context: ./frontend
-          file: ./frontend/Dockerfile
+          context: ./Frontend
+          file: ./Frontend/dockerfile
           push: true
           tags: ${{ steps.set_images.outputs.frontend }}
           cache-from: type=gha
@@ -230,7 +230,7 @@ jobs:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
           image: ${{ needs.docker-build.outputs.backend_image }}
-          args: --file=backend/dockerfile --severity-threshold=high
+          args: --file=Backend/dockerfile --severity-threshold=high
 
   # ── JOB 10 — TRIVY ───────────────────────────────────────
   trivy-scan:
