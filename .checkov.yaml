@@ -1,0 +1,12 @@
+soft-fail: false
+directory: "."
+skip-check:
+  - CKV_AWS_20
+  - CKV_K8S_21
+  - CKV_DOCKER_2
+  - CKV_DOCKER_3
+skip-path:
+  - backend/.venv
+  - frontend/node_modules
+  - frontend/dist
+  - backend/app/tests
