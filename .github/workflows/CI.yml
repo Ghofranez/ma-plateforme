@@ -99,14 +99,22 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
       - name: Install Dependencies
-        run: npm install --prefix Frontend
+        run: |
+          cd Frontend
+          npm install
+
       - name: Run Tests
         run: |
-          npm test --prefix Frontend -- \
-            --coverage \
-            --coverageReporters=lcov \
-            --watchAll=false
+          cd Frontend
+          npx vitest run --coverage
+
       - name: Upload Coverage
         uses: actions/upload-artifact@v4
         with:
