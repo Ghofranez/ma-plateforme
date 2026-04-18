@@ -1,0 +1,2 @@
+from app.infrastructure.repositories.user_repo import UserRepository
+from app.infrastructure.repositories.analysis_repo import AnalysisRepository

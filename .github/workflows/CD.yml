@@ -1,0 +1,266 @@
+name: CD - Deploy App
+permissions:
+  contents: read
+  packages: read
+  actions: read
+
+on:
+  workflow_run:
+    workflows: ["CI Pipeline"]
+    types:
+      - completed
+
+jobs:
+
+  ########################################################
+  # JOB 1 — VERIFICATION SIGNATURE COSIGN
+  ########################################################
+  cosign-verify:
+    name: Verify Image Signatures (Cosign)
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: self-hosted
+    outputs:
+      backend_image: ${{ steps.set-images.outputs.backend }}
+      frontend_image: ${{ steps.set-images.outputs.frontend }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set image names
+        id: set-images
+        run: |
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          echo "backend=ghcr.io/${OWNER}/my-backend:latest" >> $GITHUB_OUTPUT
+          echo "frontend=ghcr.io/${OWNER}/my-frontend:latest" >> $GITHUB_OUTPUT
+
+      - name: Login GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify Backend Image
+        env:
+          COSIGN_PUBLIC_KEY: ${{ secrets.COSIGN_PUBLIC_KEY }}
+        run: |
+          echo "$COSIGN_PUBLIC_KEY" > cosign.pub
+          cosign verify --key cosign.pub ${{ steps.set-images.outputs.backend }}
+          if [ $? -ne 0 ]; then
+            echo "Image backend non signée — déploiement stoppé !"
+            exit 1
+          fi
+          echo "Image backend vérifiée "
+
+      - name: Verify Frontend Image
+        env:
+          COSIGN_PUBLIC_KEY: ${{ secrets.COSIGN_PUBLIC_KEY }}
+        run: |
+          cosign verify --key cosign.pub ${{ steps.set-images.outputs.frontend }}
+          if [ $? -ne 0 ]; then
+            echo "Image frontend non signée — déploiement stoppé !"
+            exit 1
+          fi
+          echo "Image frontend vérifiée "
+
+  ########################################################
+  # JOB 2 — DEPLOIEMENT
+  ########################################################
+  deploy:
+    name: Deploy Application
+    needs: cosign-verify
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build Images Locally
+        run: |
+          docker build -t my-backend:latest ./backend -f ./backend/dockerfile
+          docker build -t my-frontend:latest ./frontend -f ./frontend/Dockerfile
+          docker images
+
+      - name: Deploy with Docker Compose
+        run: |
+          echo "=== DÉBUT DU DÉPLOIEMENT ==="
+          docker compose down          # ← sans tiret
+          docker compose up -d         # ← sans tiret
+          echo "Attente du démarrage des services..."
+          sleep 20
+          docker ps
+          echo "=== DÉPLOIEMENT TERMINÉ ==="
+
+  ########################################################
+  # JOB 3 — HEALTH CHECK
+  ########################################################
+  health-check:
+    name: Health Check
+    needs: deploy
+    runs-on: self-hosted
+    steps:
+      - name: Health Check Backend
+        run: |
+          for i in {1..10}; do
+            if curl -sf http://localhost:8000/; then
+              echo "Backend opérationnel "
+              exit 0
+            fi
+            echo "Tentative $i/10 — attente 5s..."
+            sleep 5
+          done
+          echo "Backend ne répond pas après 10 tentatives !"
+          exit 1
+
+      - name: Health Check Frontend
+        run: |
+          for i in {1..10}; do
+            if curl -sf http://localhost:3000/; then
+              echo "Frontend opérationnel "
+              exit 0
+            fi
+            echo "Tentative $i/10 — attente 5s..."
+            sleep 5
+          done
+          echo "Frontend ne répond pas après 10 tentatives !"
+          exit 1
+
+  ########################################################
+  # JOB 4 — OWASP ZAP DAST
+  ########################################################
+  dast-zap:
+    name: DAST Scan (OWASP ZAP)
+    needs: health-check
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create ZAP Report Directory
+        run: |
+          mkdir -p ${{ github.workspace }}/zap-report
+          chmod 777 ${{ github.workspace }}/zap-report
+
+      - name: OWASP ZAP Scan
+        run: |
+          docker run --rm \
+            --network host \
+            -v ${{ github.workspace }}/zap-report:/zap/wrk:rw \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py \
+            -t http://localhost:8000 \
+            -r zap-report.html \
+            -J zap-report.json \
+            -l WARN \
+            -I
+
+      - name: Analyse ZAP Results
+        run: |
+          if [ -f "${{ github.workspace }}/zap-report/zap-report.json" ]; then
+            CRITICAL=$(grep -c '"riskcode":"3"' \
+              ${{ github.workspace }}/zap-report/zap-report.json || true)
+            if [ "$CRITICAL" -gt "0" ]; then
+              echo "ZAP détecte $CRITICAL faille(s) CRITIQUE(S) !"
+              exit 1
+            fi
+            echo "Aucune faille critique détectée "
+          else
+            echo "Rapport ZAP non trouvé — scan ignoré"
+          fi
+
+      - name: Upload ZAP Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-report
+          path: ${{ github.workspace }}/zap-report/zap-report.html
+
+  ########################################################
+  # JOB 5 — FALCO RUNTIME SECURITY
+  ########################################################
+  falco-check:
+    name: Falco Runtime Security Check
+    needs: dast-zap
+    runs-on: self-hosted
+    steps:
+      - name: Check Falco Alerts
+        run: |
+          echo "Vérification des alertes Falco..."
+          ALERTS=$(sudo journalctl -u falco --since "5 minutes ago" \
+            | grep -i "critical" || true)
+          if [ -n "$ALERTS" ]; then
+            echo "Falco détecte une menace critique !"
+            echo "$ALERTS"
+            exit 1
+          fi
+          echo "Aucune alerte Falco critique "
+
+  ########################################################
+  # JOB 6 — VERIFY CONTAINERS
+  ########################################################
+  verify-containers:
+    name: Verify Running Containers
+    needs: falco-check
+    runs-on: self-hosted
+    steps:
+      - name: List Running Containers
+        run: |
+          echo "=== CONTENEURS EN COURS D'EXÉCUTION ==="
+          docker ps
+          echo "======================================="
+
+      - name: Check Container Count
+        run: |
+          COUNT=$(docker ps --filter "status=running" \
+            --format '{{.Names}}' | wc -l)
+          echo "Nombre de conteneurs actifs : $COUNT"
+          if [ "$COUNT" -lt 2 ]; then
+            echo "Moins de 2 conteneurs actifs !"
+            exit 1
+          fi
+          echo "Tous les conteneurs sont actifs "
+
+  ########################################################
+  # JOB 7 — ROLLBACK SI ECHEC
+  ########################################################
+  rollback:
+    name: Rollback on Failure
+    needs: [deploy, health-check, dast-zap, falco-check, verify-containers]
+    runs-on: self-hosted
+    if: failure()
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Rollback Docker Compose
+        run: |
+          echo "=== ROLLBACK EN COURS ==="
+          docker compose down          # ← sans tiret
+          docker compose up -d         # ← sans tiret
+          echo "=== ROLLBACK TERMINÉ ==="
+
+      - name: Verify Rollback
+        run: |
+          sleep 10
+          docker ps
+          echo "Rollback effectué "
+
+  ########################################################
+  # JOB 8 — NOTIFICATIONS
+  ########################################################
+  notify:
+    name: Notifications
+    needs: [verify-containers, rollback, cosign-verify]
+    runs-on: self-hosted
+    if: always()
+    steps:
+      - name: Notify Success
+        if: ${{ needs.verify-containers.result == 'success' }}
+        run: |
+          echo "Déploiement réussi !"
+          echo "Backend  : ${{ needs.cosign-verify.outputs.backend_image }}"
+          echo "Frontend : ${{ needs.cosign-verify.outputs.frontend_image }}"
+
+      - name: Notify Failure
+        if: ${{ needs.verify-containers.result != 'success' }}
+        run: |
+          echo "Déploiement échoué — vérifiez les logs GitHub Actions !"

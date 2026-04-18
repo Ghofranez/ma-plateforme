@@ -1,0 +1,29 @@
+title = "Custom Gitleaks ruleset for Docker + React + FastAPI"
+
+# Fichiers à ignorer pour éviter les faux positifs
+[allowlist]
+files = ["docs/**", "tests/**", "node_modules/**", ".venv/**", "frontend/build/**"]
+
+# Patterns personnalisés pour clés internes
+[[rules]]
+id = "Internal-API-Key"
+description = "Internal API key"
+regex = '''MY_API_KEY_[A-Z0-9]{32}'''
+tags = ["key", "internal"]
+
+[[rules]]
+id = "AWS-Access-Key"
+description = "AWS Key"
+regex = '''AKIA[0-9A-Z]{16}'''
+
+[[rules]]
+id = "Generic-Password"
+description = "Generic password variable"
+regex = '''(?i)password\s*=\s*['\"].+['\"]'''
+tags = ["password"]
+
+[[rules]]
+id = "JWT-Secret"
+description = "JWT Secret"
+regex = '''(?i)jwt_secret\s*=\s*['\"].+['\"]'''
+tags = ["jwt", "secret"]

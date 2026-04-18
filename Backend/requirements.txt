@@ -1,0 +1,14 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+mysql-connector-python
+python-dotenv
+passlib[bcrypt]
+bcrypt==4.0.1 
+pyjwt
+python-multipart
+pytest
+httpx
+pytest-cov
+greenlet
+pydantic[email]
