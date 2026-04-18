@@ -195,7 +195,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.PAT_TOKEN }}
       - uses: anchore/sbom-action@v0.24.0
         with:
           image: ${{ needs.docker-build.outputs.backend_image }}
@@ -227,7 +227,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.Pat_TOKEN }}
       - name: Pull Images
         run: |
           docker pull ${{ needs.docker-build.outputs.backend_image }}
@@ -265,7 +265,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.Pat_TOKEN }}
       - name: Pull Images
         run: |
           docker pull ${{ needs.docker-build.outputs.backend_image }}
