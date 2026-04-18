@@ -56,6 +56,19 @@ jobs:
     name: Backend Tests
     needs: policy-scan
     runs-on: ubuntu-24.04
+    services:
+     mysql:
+      image: mysql:8
+      env:
+        MYSQL_ROOT_PASSWORD: root
+        MYSQL_DATABASE: test_db
+      ports:
+        - 3306:3306
+      options: >-
+        --health-cmd="mysqladmin ping --silent"
+        --health-interval=10s
+        --health-timeout=5s
+        --health-retries=5
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       SECRET_KEY: ${{ secrets.SECRET_KEY }}
@@ -77,6 +90,7 @@ jobs:
         with:
           name: backend-coverage
           path: Backend/coverage.xml
+
 
   # ── JOB 5 — FRONTEND TESTS ───────────────────────────────
   frontend-tests:
