@@ -223,15 +223,28 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Frontend Dependencies
+        run: |
+          cd Frontend
+          npm install
+
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.Pat_TOKEN }}
+          password: ${{ secrets.PAT_TOKEN }}
+
       - name: Pull Images
         run: |
           docker pull ${{ needs.docker-build.outputs.backend_image }}
           docker pull ${{ needs.docker-build.outputs.frontend_image }}
+
       - name: Snyk Backend
         uses: snyk/actions/python@master
         env:
@@ -239,6 +252,7 @@ jobs:
         with:
           command: test
           args: --file=Backend/requirements.txt --skip-unresolved
+
       - name: Snyk Frontend
         uses: snyk/actions/node@master
         env:
@@ -246,6 +260,7 @@ jobs:
         with:
           command: test
           args: --file=Frontend/package.json
+
       - name: Snyk Container
         uses: snyk/actions/docker@master
         env:
