@@ -38,7 +38,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.PAT_TOKEN }}     
 
       - name: Verify Backend Image
         env:
@@ -74,11 +74,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build Images Locally
+      - name: Create .env file
         run: |
-          docker build -t my-backend:latest ./Backend -f ./Backend/dockerfile
-          docker build -t my-frontend:latest ./Frontend -f ./Frontend/dockerfile
-          docker images
+          cat > .env << EOF
+          MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }}
+          MYSQL_DATABASE=${{ secrets.MYSQL_DATABASE }}
+          MYSQL_USER=${{ secrets.MYSQL_USER }}
+          MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }}
+          DATABASE_URL=${{ secrets.DATABASE_URL }}
+          SECRET_KEY=${{ secrets.SECRET_KEY }}
+          SMTP_EMAIL=${{ secrets.SMTP_EMAIL }}
+          SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}
+          EOF
+
+      - name: Login GHCR
+        run: |
+          echo "${{ secrets.PAT_TOKEN }}" | docker login ghcr.io \
+            -u ${{ github.actor }} --password-stdin
+
+      - name: Pull Images
+        run: |
+          docker pull ${{ needs.cosign-verify.outputs.backend_image }}
+          docker pull ${{ needs.cosign-verify.outputs.frontend_image }}
 
       - name: Deploy with Docker Compose
         run: |
@@ -86,7 +103,7 @@ jobs:
           docker compose down
           docker compose up -d
           echo "Attente du démarrage des services..."
-          sleep 20
+          sleep 30
           docker ps
           echo "=== DÉPLOIEMENT TERMINÉ ==="
 
@@ -100,15 +117,15 @@ jobs:
     steps:
       - name: Health Check Backend
         run: |
-          for i in {1..10}; do
+          for i in {1..15}; do
             if curl -sf http://localhost:8000/; then
               echo "Backend opérationnel "
               exit 0
             fi
-            echo "Tentative $i/10 — attente 5s..."
-            sleep 5
+            echo "Tentative $i/15 — attente 10s..."
+            sleep 10
           done
-          echo "Backend ne répond pas après 10 tentatives !"
+          echo "Backend ne répond pas après 15 tentatives !"
           exit 1
 
       - name: Health Check Frontend
@@ -235,7 +252,7 @@ jobs:
         run: |
           echo "=== ROLLBACK EN COURS ==="
           docker compose down
-          docker compose up -d         
+          docker compose up -d
           echo "=== ROLLBACK TERMINÉ ==="
 
       - name: Verify Rollback
@@ -263,4 +280,4 @@ jobs:
       - name: Notify Failure
         if: ${{ needs.verify-containers.result != 'success' }}
         run: |
-          echo "Déploiement échoué — vérifiez les logs GitHub Actions !"
+          echo " Déploiement échoué — vérifiez les logs GitHub Actions !"
