@@ -9,6 +9,10 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Plateforme Analyse Sécurité")
 
+@app.get("/")
+def health():
+    return {"status": "ok"}
+
 origins = [
     "http://localhost:5173",    # Vite dev
     "http://127.0.0.1:5173",
