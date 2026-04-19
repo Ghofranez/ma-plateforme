@@ -84,6 +84,8 @@ jobs:
           echo "SECRET_KEY=${{ secrets.SECRET_KEY }}" >> .env
           echo "SMTP_EMAIL=${{ secrets.SMTP_EMAIL }}" >> .env
           echo "SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}" >> .env
+          echo "BACKEND_IMAGE=${{ needs.cosign-verify.outputs.backend_image }}" >> .env
+          echo "FRONTEND_IMAGE=${{ needs.cosign-verify.outputs.frontend_image }}" >> .env
           cat .env
 
       - name: Login GHCR
@@ -99,9 +101,8 @@ jobs:
       - name: Deploy with Docker Compose
         run: |
           echo "=== DÉBUT DU DÉPLOIEMENT ==="
-          docker compose down
-          docker compose up -d
-          echo "Attente du démarrage des services..."
+          docker compose -f docker-compose.prod.yml down
+          docker compose -f docker-compose.prod.yml up -d
           sleep 30
           docker ps
           echo "=== DÉPLOIEMENT TERMINÉ ==="
