@@ -11,15 +11,14 @@ services:
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
-    #ports:
-     # - "3306:3306"
     volumes:
       - db_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p$$MYSQL_ROOT_PASSWORD || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+      start_period: 30s
 
   # ─────────────────────────────
   # phpMyAdmin
@@ -59,7 +58,7 @@ services:
   # FRONTEND React/Vite
   # ─────────────────────────────
   frontend:
-    build: ./Frontend
+    build: ./Frontend        
     image: my-frontend:latest
     ports:
       - "3000:80"

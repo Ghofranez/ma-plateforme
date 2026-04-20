@@ -1,75 +1,158 @@
-# React + TypeScript + Vite
+# Ma Plateforme — Frontend (React + Vite)
+## Présentation du projet
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Ce frontend a été développé dans le cadre de mes études pour créer
+une interface utilisateur moderne et sécurisée.
 
-Currently, two official plugins are available:
+J'ai utilisé **React avec Vite** pour la rapidité de développement,
+et **TypeScript** pour la robustesse du code.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Technologies utilisées
 
-## React Compiler
+**React**
+**TypeScript**       : Typage statique pour plus de robustesse
+**Vite**             : Bundler ultra-rapide
+**Tailwind CSS**     : Styles utilitaires
+**Axios**            : Appels API vers le backend
+**React Router DOM** : Navigation entre les pages
+**Framer Motion**    : Animations fluides
+**Shadcn/UI**        : Composants UI réutilisables
+**React Hot Toast**  : Notifications utilisateur
+**Lucide React**     : Icônes modernes
+**Vitest**           : Tests unitaires
+**Nginx**            : Serveur web en production
 
-The React Compiler is enabled on this template. See [this documentation](https://react.dev/learn/react-compiler) for more information.
+## Prérequis
 
-Note: This will impact Vite dev & build performances.
+**Node.js** : 20.20.2  : `node --version`
+**npm**     : 10.8.2   : `npm --version`
+**Docker**  : 29.3.0   : `docker --version`
+**Git**     : 2.53.0   : `git --version`
 
-## Expanding the ESLint configuration
+## Structure du projet
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+Frontend/
+├── src/
+│   ├── api/
+│   │   └── api.ts                  # Configuration Axios + intercepteurs
+│   ├── services/
+│   │   └── auth.service.ts         # Appels API backend
+│   ├── pages/
+│   │   ├── Loginpage/              # Page de connexion
+│   │   ├── Registerpage/           # Page d'inscription
+│   │   ├── Vérificationemail/      # Page OTP 2FA
+│   │   ├── Motdepasseoublie/       # Page mot de passe oublié
+│   │   ├── Verificationmdp/        # Vérification code reset
+│   │   ├── Réinitialisermdp/       # Nouveau mot de passe
+│   │   ├── Accueilpage/            # Page principale analyse URL
+│   │   ├── Historique/             # Historique des analyses
+│   │   ├── Profil/                 # Profil utilisateur
+│   │   └── Sidebar/                # Navigation latérale
+│   ├── components/
+│   │   └── ui/                     # Composants réutilisables
+│   └── tests/
+│       └── basic.test.ts           # Tests unitaires
+├── public/                         # Assets statiques
+├── vite.config.ts                  # Configuration Vite
+├── vitest.config.ts                # Configuration Vitest
+├── tailwind.config.ts              # Configuration Tailwind
+├── tsconfig.json                   # Configuration TypeScript
+├── package.json                    # Dépendances
+└── Dockerfile                      # Image Docker production
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+## Pages de l'application
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+### Authentification
+- **Login** → Connexion avec email + mot de passe
+- **Register** → Création de compte avec validation
+- **Vérification email** → Code OTP à 6 chiffres (2FA)
+
+###  Mot de passe oublié
+- **Mot de passe oublié** → Saisie de l'email
+- **Vérification code** → Code OTP de reset
+- **Réinitialisation** → Nouveau mot de passe
+
+### Application principale
+- **Accueil** → Analyse d'URL avec outils de sécurité
+- **Historique** → Liste des analyses passées
+- **Profil** → Modification des informations personnelles
+
+## Fonctionnement
+### Sécurité — Token JWT en Cookie HttpOnly
+
+1- Login réussi
+2- Backend génère un token JWT
+3- Token stocké dans un cookie HttpOnly
+4- JavaScript ne peut PAS lire le cookie
+5- Protection contre les attaques XSS
+
+### Appels API — Axios
+
+```typescript
+// api.ts — transporteur entre frontend et backend
+export const api = axios.create({
+  baseURL: "http://localhost:8000",
+  withCredentials: true,  // envoie les cookies automatiquement
+});
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+### Installation locale
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+- Cloner le projet
+git clone https://github.com/Ghofranez/ma-plateforme
+cd Frontend
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+- Installer les dépendances
+npm install
+
+- Lancer en développement
+npm run dev
+
+- Accées :
+
+ Application React (dev): `http://localhost:5173`
+
+ Docker
+
+
+- Lancer avec Docker Compose (dev local)
+
+cd ..
+
+docker compose up --build -d
+
+- Services disponibles:
+
+ Frontend  → http://localhost:3000
+ Backend   → http://localhost:8000
+ phpMyAdmin → http://localhost:8080
+
+### Tests
+
+- Lancer les tests : npx vitest run
+
+- Avec coverage : npx vitest run --coverage
+
+### Fonctionnalités implémentées
+
+- **Authentification 2FA** : avec code OTP par email
+- **Cookie HttpOnly**      : pour sécuriser le token JWT
+- **Gestion du profil**    : modifier nom, prénom, mot de passe
+- **Analyse d'URL**        : soumettre des URLs à analyser
+- **Historique**           : consulter les analyses passées
+- **Reset mot de passe**   : par email
+- **Interface responsive** : avec Tailwind CSS
+- **Animations**           : avec Framer Motion
+
+### Conclusion
+
+Ce projet m'a permis de pratiquer :
+
+- Le développement d'interfaces avec **React + TypeScript**
+- La sécurisation des appels API avec **Axios + cookies HttpOnly**
+- La gestion des **formulaires avec validation**
+- L'intégration d'une **authentification 2FA**
+- La **containerisation** avec Docker et Nginx
+- Les **tests** avec Vitest
+- Le **pipeline CI/CD** avec GitHub Actions

@@ -11,7 +11,7 @@ export const loginUser    = (data: any) => api.post("/login", data);
 // EMAIL VERIFICATION (2FA login)
 // ─────────────────────────────
 export const sendEmailCode = (email: string) =>
-  api.post("/send-email-code", { email }); // ← corrigé
+  api.post("/send-email-code", { email }); 
 
 export const verifyLoginCode = (data: {
   email: string;
