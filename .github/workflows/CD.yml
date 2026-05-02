@@ -69,6 +69,7 @@ jobs:
   deploy:
     name: Deploy Application
     needs: cosign-verify
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: self-hosted
     steps:
       - name: Checkout
@@ -120,6 +121,7 @@ jobs:
   health-check:
     name: Health Check
     needs: deploy
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: self-hosted
     steps:
       - name: Health Check Backend
@@ -165,6 +167,7 @@ jobs:
   dast-zap:
     name: DAST Scan (OWASP ZAP)
     needs: health-check
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: self-hosted
     steps:
       - name: Checkout
@@ -215,6 +218,7 @@ jobs:
   falco-check:
     name: Falco Runtime Security Check
     needs: dast-zap
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: self-hosted
     steps:
       - name: Check Falco Alerts
@@ -235,6 +239,7 @@ jobs:
   verify-containers:
     name: Verify Running Containers
     needs: falco-check
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: self-hosted
     steps:
       - name: List Running Containers

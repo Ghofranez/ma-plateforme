@@ -5,7 +5,8 @@ from app.core.config import settings
 from app.application.services.email import send_verification_email
 
 # Connexion Redis — même URL que Celery dans ton .env
-r = redis.from_url(settings.REDIS_URL, decode_responses=True)
+def get_redis():
+    return redis.from_url(settings.REDIS_URL, decode_responses=True)
 
 
 def generate_code() -> str:
@@ -15,12 +16,14 @@ def generate_code() -> str:
 
 # ── LOGIN 2FA ──────────────────────────────────────────────────────────────
 def store_login_code(email: str):
+    r= get_redis()
     code = generate_code()
     r.setex(f"otp:login:{email}", 600, code)  # expire automatiquement en 10 min
     send_verification_email(email, code)
 
 
 def verify_login_code(email: str, code: str) -> bool:
+    r = get_redis()
     stored = r.get(f"otp:login:{email}")
     if not stored or stored != code:
         return False
@@ -30,12 +33,14 @@ def verify_login_code(email: str, code: str) -> bool:
 
 # ── RESET MOT DE PASSE ─────────────────────────────────────────────────────
 def store_reset_code(email: str):
+    r = get_redis()
     code = generate_code()
     r.setex(f"otp:reset:{email}", 600, code)  # expire automatiquement en 10 min
     send_verification_email(email, code)
 
 
 def verify_reset_code(email: str, code: str) -> bool:
+    r = get_redis()
     stored = r.get(f"otp:reset:{email}")
     if not stored or stored != code:
         return False
@@ -43,11 +48,13 @@ def verify_reset_code(email: str, code: str) -> bool:
 
 
 def clear_reset_code(email: str):
+    r = get_redis()
     r.delete(f"otp:reset:{email}")
 
 
 # ── ANTI-SPAM : cooldown 30 secondes entre deux envois ─────────────────────
 def check_cooldown(email: str) -> bool:
+    r = get_redis()
     key = f"otp:cooldown:{email}"
     if r.exists(key):
         return False  # encore en cooldown

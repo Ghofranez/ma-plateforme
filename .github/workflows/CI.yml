@@ -69,12 +69,21 @@ jobs:
         --health-interval=10s
         --health-timeout=5s
         --health-retries=5
+     redis:
+      image: redis:7-alpine
+      ports:
+        - 6379:6379
+      options: >-
+        --health-cmd="redis-cli ping"
+        --health-interval=5s
+        --health-timeout=3s
+        --health-retries=5
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       SECRET_KEY: ${{ secrets.SECRET_KEY }}
       SMTP_EMAIL: ${{ secrets.SMTP_EMAIL }}
       SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
-       # Clés des outils de scan
+      Redis_URL: ${{secrets.REDIS_URL}}
       VIRUSTOTAL_KEY:           ${{ secrets.VIRUSTOTAL_KEY }}
       GOOGLE_SAFE_BROWSING_KEY: ${{ secrets.GOOGLE_SAFE_BROWSING_KEY }}
       URLSCAN_API_KEY:          ${{ secrets.URLSCAN_API_KEY }}
