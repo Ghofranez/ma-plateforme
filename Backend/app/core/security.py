@@ -27,12 +27,15 @@ def decode_access_token(token: str):
 
 from fastapi import Response
 
+# Cookie HttpOnly = JavaScript ne peut pas le lire
+# → protège contre les attaques XSS
+
 def set_auth_cookie(response: Response, token: str):
     response.set_cookie(
         key="access_token",
         value=token,
         httponly=True,       # ← JavaScript ne peut pas lire
-        secure=False,        # ← True en production (HTTPS)
+        secure=True,        # ← True en production (HTTPS)
         samesite="lax",      # ← protection CSRF
         max_age=3600,        # ← expire dans 1h (secondes)
     )

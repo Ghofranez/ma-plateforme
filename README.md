@@ -405,3 +405,5 @@ Nginx comme reverse proxy : il reçoit les requêtes et les redirige vers le bon
 Schéma de flux :
 
 git push → CI → CD → Déploiement sur VM → Application en ligne
+
+> docker compose.prod.yml : nécessaire pour pipeline CD pour deploiement

@@ -3,27 +3,10 @@ import { Link, useNavigate } from "react-router-dom";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle
-} from "../../components/ui/card";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "../../components/ui/card";
 
-import {
-  Mail,
-  Lock,
-  Eye,
-  EyeOff,
-  ShieldCheck,
-  Fingerprint,
-  Loader2
-} from "lucide-react";
-
-import { loginUser } from "../../services/auth.service"; 
-import "../../pages/Loginpage/loginpage.css";
+import { Mail, Lock, Eye, EyeOff, ShieldCheck, Fingerprint, Loader2 } from "lucide-react";
+import { loginUser } from "../../services/auth.service";
 
 export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
@@ -38,111 +21,133 @@ export default function Login() {
     e.preventDefault();
     setError("");
     setLoading(true);
- try {
-  const res = await loginUser({ email, password });
 
-  if (res.requires2FA) {
-    navigate("/vérificationemail",
-    {
-    state: { email }
-  });
-    return;
-  }
-
-} catch (err: any) {
-  setError(
-    err?.response?.data?.detail ||
-    "Email ou mot de passe incorrect"
-  );
-} finally {
-  setLoading(false);
-}}
+    try {
+      const res = await loginUser({ email, password }) as any;
+      if (res.requires2FA) {
+        navigate("/vérificationemail", { state: { email } });
+        return;
+      }
+    } catch (err: any) {
+      setError(err?.response?.data?.detail || "Email ou mot de passe incorrect");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <div className="login-container">
-      <Card className="login-card">
-        <CardHeader className="login-header">
-          <div className="login-icon-wrapper">
-            <div className="login-icon-box">
-              <Fingerprint className="login-icon" />
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50 p-4">
+
+      <Card className="w-full max-w-md shadow-2xl border border-slate-200 rounded-2xl bg-white">
+
+        {/* HEADER */}
+        <CardHeader className="text-center space-y-3">
+          <div className="flex justify-center">
+            <div className="w-14 h-14 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 flex items-center justify-center shadow-lg">
+              <Fingerprint className="text-white" />
             </div>
           </div>
-          <CardTitle className="login-title">Bienvenue</CardTitle>
-          <CardDescription className="login-description">
+
+          <CardTitle className="text-2xl font-bold text-slate-900">
+            Bienvenue
+          </CardTitle>
+
+          <CardDescription className="text-slate-500">
             Connectez-vous à notre plateforme
           </CardDescription>
         </CardHeader>
 
+        {/* FORM */}
         <form onSubmit={handleSubmit}>
-          <CardContent className="login-content">
-            {error && <div className="login-error">{error}</div>}
+          <CardContent className="space-y-4">
 
-            <div className="login-field">
-              <Label htmlFor="email">Adresse email</Label>
-              <div className="login-input-wrapper">
-                <Mail className="login-input-icon" />
+            {error && (
+              <div className="bg-red-50 text-red-600 text-sm p-3 rounded-lg border border-red-200">
+                {error}
+              </div>
+            )}
+
+            {/* EMAIL */}
+            <div className="space-y-2">
+              <Label>Email</Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-3 text-slate-400 w-4 h-4" />
                 <Input
-                  id="email"
                   type="email"
                   placeholder="exemple@email.com"
-                  className="login-input"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  className="pl-10"
                   required
                 />
               </div>
             </div>
 
-            <div className="login-field">
-              <div className="login-password-header">
-                <Label htmlFor="password">Mot de passe</Label>
-                <Button type="button" variant="link" className="login-forgot">
-                  <Link to="/Motdepasseoublie">Mot de passe oublié?</Link>
-                </Button>
+            {/* PASSWORD */}
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <Label>Mot de passe</Label>
+                <Link
+                  to="/Motdepasseoublie"
+                  className="text-xs text-blue-600 hover:underline"
+                >
+                  Mot de passe oublié ?
+                </Link>
               </div>
-              <div className="login-input-wrapper">
-                <Lock className="login-input-icon" />
+
+              <div className="relative">
+                <Lock className="absolute left-3 top-3 text-slate-400 w-4 h-4" />
+
                 <Input
-                  id="password"
                   type={showPassword ? "text" : "password"}
                   placeholder="••••••••"
                   autoComplete="new-password"
-                  className="login-input login-input-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  className="pl-10 pr-10"
                   required
                 />
+
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="login-eye-btn"
+                  className="absolute right-3 top-3 text-slate-400 hover:text-slate-700"
                 >
-                  {showPassword ? <EyeOff className="login-eye-icon" /> : <Eye className="login-eye-icon" />}
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
             </div>
 
-            <div className="login-2fa-badge">
+            {/* BADGE */}
+            <div className="flex items-center gap-2 text-xs text-blue-600 bg-blue-50 p-2 rounded-lg">
               <ShieldCheck size={14} />
-              <span>Vérification par email</span>
+              Vérification par email activée
             </div>
           </CardContent>
 
-          <CardFooter className="login-footer">
-            <Button type="submit" className="login-btn" disabled={loading}>
+          {/* BUTTON */}
+          <CardFooter className="flex flex-col gap-3">
+            <Button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:opacity-90 transition"
+            >
               {loading ? (
-                <>
-                  <Loader2 className="animate-spin mr-2" size={16} />
+                <div className="flex items-center gap-2">
+                  <Loader2 className="animate-spin w-4 h-4" />
                   Connexion...
-                </>
+                </div>
               ) : (
                 "Se connecter"
               )}
             </Button>
-            <div className="login-register-link">
-              Pas encore de compte?{" "}
-              <Link to="/register" className="login-link">S'inscrire</Link>
-            </div>
+
+            <p className="text-sm text-slate-500">
+              Pas encore de compte ?{" "}
+              <Link to="/register" className="text-blue-600 hover:underline">
+                S'inscrire
+              </Link>
+            </p>
           </CardFooter>
         </form>
       </Card>

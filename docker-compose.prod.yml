@@ -1,56 +1,121 @@
 services:
 
+  # ── Base de données MySQL ──────────────────────────────────────────────
   db:
     image: mysql:8
     restart: always
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_DATABASE: ${MYSQL_DATABASE}
-      MYSQL_USER: ${MYSQL_USER}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_DATABASE:      ${MYSQL_DATABASE}
+      MYSQL_USER:          ${MYSQL_USER}
+      MYSQL_PASSWORD:      ${MYSQL_PASSWORD}
     volumes:
       - db_data:/var/lib/mysql
+    networks:
+      - internal
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p$$MYSQL_ROOT_PASSWORD || exit 1"]
-      interval: 10s
-      timeout: 10s
-      retries: 15
+      interval:     10s
+      timeout:      10s
+      retries:      15
       start_period: 30s
 
+  # ── phpMyAdmin ─────────────────────────────────────────────────────────
   phpmyadmin:
     image: phpmyadmin:latest
     restart: always
     ports:
-      - "8080:80"
+      - "127.0.0.1:8080:80"
     environment:
-      PMA_HOST: db
-      PMA_USER: ${MYSQL_USER}
+      PMA_HOST:     db
+      PMA_USER:     ${MYSQL_USER}
       PMA_PASSWORD: ${MYSQL_PASSWORD}
+    networks:
+      - internal
     depends_on:
       db:
         condition: service_healthy
 
+  # ── Redis ──────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: always
+
+    networks:
+      - internal
+    healthcheck:
+      test:     ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout:  3s
+      retries:  5
+
+  # ── Backend ────────────────────────────────────────────────────────────
   backend:
-    image: ${BACKEND_IMAGE}      # ← variable dynamique
+    image: ${BACKEND_IMAGE}
+    restart: always
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: mysql+mysqlconnector://${MYSQL_USER}:${MYSQL_PASSWORD}@db:3306/${MYSQL_DATABASE}
-      SECRET_KEY: ${SECRET_KEY}
-      SMTP_EMAIL: ${SMTP_EMAIL}
-      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      DATABASE_URL:             mysql+mysqlconnector://${MYSQL_USER}:${MYSQL_PASSWORD}@db:3306/${MYSQL_DATABASE}
+      SECRET_KEY:               ${SECRET_KEY}
+      SMTP_EMAIL:               ${SMTP_EMAIL}
+      SMTP_PASSWORD:            ${SMTP_PASSWORD}
+      REDIS_URL:                ${REDIS_URL}
+      VIRUSTOTAL_KEY:           ${VIRUSTOTAL_KEY}
+      GOOGLE_SAFE_BROWSING_KEY: ${GOOGLE_SAFE_BROWSING_KEY}
+      URLSCAN_API_KEY:          ${URLSCAN_API_KEY}
+      OPENPHISH_ENABLED:        "true"
+    networks:
+      - internal
     depends_on:
       db:
         condition: service_healthy
-    restart: always
+      redis:
+        condition: service_healthy
 
+  # ── Worker Celery ──────────────────────────────────────────────────────
+  worker:
+    image: ${BACKEND_IMAGE}
+    restart: always
+    command: >
+      celery -A app.application.services.celery_app.celery_app
+      worker --loglevel=info --concurrency=2
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    environment:
+      DATABASE_URL:             mysql+mysqlconnector://${MYSQL_USER}:${MYSQL_PASSWORD}@db:3306/${MYSQL_DATABASE}
+      SECRET_KEY:               ${SECRET_KEY}
+      SMTP_EMAIL:               ${SMTP_EMAIL}
+      SMTP_PASSWORD:            ${SMTP_PASSWORD}
+      REDIS_URL:                ${REDIS_URL}
+      VIRUSTOTAL_KEY:           ${VIRUSTOTAL_KEY}
+      GOOGLE_SAFE_BROWSING_KEY: ${GOOGLE_SAFE_BROWSING_KEY}
+      URLSCAN_API_KEY:          ${URLSCAN_API_KEY}
+      OPENPHISH_ENABLED:        "true"
+    networks:
+      - internal
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ── Frontend ───────────────────────────────────────────────────────────
   frontend:
-    image: ${FRONTEND_IMAGE}     # ← variable dynamique
+    image: ${FRONTEND_IMAGE}
+    restart: always
     ports:
       - "3000:80"
-    depends_on:
+    networks:
+      - internal
       - backend
-    restart: always
 
+# ── Réseau interne ────────────────────────────────────────────────────────
+networks:
+  internal:
+    driver: bridge
+
+# ── Volumes persistants ───────────────────────────────────────────────────
 volumes:
   db_data:

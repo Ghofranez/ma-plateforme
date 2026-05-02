@@ -7,7 +7,7 @@ import { ArrowLeft, Save, Lock, Eye, EyeOff, CheckCircle, Check, X } from "lucid
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "react-hot-toast";
-import { Sidebar, MenuButton } from "../Sidebar/sidebar";
+import { Sidebar, MenuButton } from "../../components/ui/Sidebar/sidebar";
 import {
   updateProfile,
   changePassword,
@@ -50,7 +50,7 @@ export default function Profile() {
   useEffect(() => {
     const load = async () => {
       try {
-        const data = await getMe();
+        const data = await getMe() as any;
         const loaded = {
           firstName: data.nom || "",
           lastName: data.prenom || "",

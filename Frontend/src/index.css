@@ -1,8 +1,13 @@
+/* ========================================== */
+/*             Importations principales       */
+/* ========================================== */
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
 
-/* Variables globales */
+/* ========================================== */
+/*             Variables globales             */
+/* ========================================== */
 :root {
   --text: #6b6375;
   --text-h: #08060d;
@@ -13,8 +18,11 @@
   --accent-bg: rgba(170, 59, 255, 0.1);
   --accent-border: rgba(170, 59, 255, 0.5);
   --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6 -2px;
+  --shadow: rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6 -2px;
+
+  /* Tailwind helpers */
+  --background: var(--bg);
+  --foreground: var(--text);
 
   --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
   --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
@@ -35,6 +43,7 @@
   }
 }
 
+/* Dark mode */
 @media (prefers-color-scheme: dark) {
   :root {
     --text: #9ca3af;
@@ -46,13 +55,17 @@
     --accent-bg: rgba(192, 132, 252, 0.15);
     --accent-border: rgba(192, 132, 252, 0.5);
     --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6 -2px;
+    --shadow: rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6 -2px;
+    --background: var(--bg);
+    --foreground: var(--text);
   }
 }
 
+/* ========================================== */
+/*                 Root container             */
+/* ========================================== */
 #root {
-  width: 1126px;
+  width: min(1126px, 100%);
   max-width: 100%;
   margin: 0 auto;
   text-align: center;
@@ -63,13 +76,20 @@
   box-sizing: border-box;
 }
 
+/* ========================================== */
+/*                 Body global                */
+/* ========================================== */
 body {
   margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  @apply font-sans;
 }
 
-/* Titres */
-h1,
-h2 {
+/* ========================================== */
+/*                   Titres                    */
+/* ========================================== */
+h1, h2 {
   font-family: var(--heading);
   font-weight: 500;
   color: var(--text-h);
@@ -79,24 +99,29 @@ h1 {
   font-size: 56px;
   letter-spacing: -1.68px;
   margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
-  }
 }
+
 h2 {
   font-size: 24px;
   line-height: 118%;
   letter-spacing: -0.24px;
   margin: 0 0 8px;
-  @media (max-width: 1024px) {
+}
+
+@media (max-width: 1024px) {
+  h1 {
+    font-size: 36px;
+    margin: 20px 0;
+  }
+  h2 {
     font-size: 20px;
   }
 }
 
-/* Code et compteur */
-code,
-.counter {
+/* ========================================== */
+/*                  Code / compteur           */
+/* ========================================== */
+code, .counter {
   font-family: var(--mono);
   display: inline-flex;
   border-radius: 4px;
@@ -110,15 +135,19 @@ code {
   background: var(--code-bg);
 }
 
-/* Tailwind */
+/* ========================================== */
+/*                 Tailwind imports           */
+/* ========================================== */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Définir les classes personnalisées pour Tailwind */
+/* ========================================== */
+/*        Classes utilitaires personnalisées  */
+/* ========================================== */
 @layer utilities {
   .border-border {
-    border: 1px solid #000;
+    border-color: var(--border);
   }
   .bg-background {
     background-color: var(--background);
@@ -126,16 +155,7 @@ code {
   .text-foreground {
     color: var(--foreground);
   }
-  .outline-ring-50 {
-    outline: 2px solid rgba(112, 76, 182, 0.5); /* exemple pour un ring */
+  .ring-custom {
+    @apply ring-2 ring-purple-500/50;
   }
-}
-
-/* Appliquer les classes personnalisées */
-body {
-  @apply bg-background text-foreground;
-}
-
-html {
-  @apply font-sans;
 }

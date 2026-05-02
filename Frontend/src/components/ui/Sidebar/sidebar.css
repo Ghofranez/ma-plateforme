@@ -1,0 +1,398 @@
+/* Overlay (Le fond sombre quand la sidebar est ouverte) */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(15, 23, 42, 0.4); /* Bleu marine très transparent */
+  backdrop-filter: blur(4px); /* Effet de flou derrière la barre */
+  z-index: 40;
+}
+
+/* Sidebar Container */
+.sidebar {
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 300px;
+  background-color: white;
+  box-shadow: 4px 0 25px -5px rgba(0, 0, 0, 0.1);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 24px;
+}
+
+/* Header */
+.sidebar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 40px;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logo-icon {
+  color: #2563eb; /* Bleu principal */
+  width: 32px;
+  height: 32px;
+}
+
+.logo h2 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0;
+}
+
+.logo p {
+  font-size: 0.75rem;
+  color: #64748b;
+  margin: 0;
+}
+
+.close-btn {
+  background: transparent !important;
+  border: none !important;
+  color: #94a3b8 !important;
+  padding: 4px !important;
+  height: auto !important;
+}
+
+.close-btn:hover {
+  color: #1e293b !important;
+}
+
+/* Navigation */
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  color: #64748b;
+  text-decoration: none;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.nav-item svg {
+  width: 20px;
+  height: 20px;
+}
+
+.nav-item:hover {
+  background-color: #f1f5f9;
+  color: #2563eb;
+}
+
+.nav-item.active {
+  background-color: #eff6ff;
+  color: #2563eb;
+  font-weight: 600;
+}
+
+/* Logout Button */
+.logout {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  background-color: #fff1f2 !important; /* Rouge très clair */
+  color: #e11d48 !important; /* Rouge */
+  border-radius: 10px !important;
+  padding: 12px 16px !important;
+  font-weight: 600 !important;
+  border: 1px solid #fecdd3 !important;
+  width: 100% !important;
+}
+
+.logout:hover {
+  background-color: #ffe4e6 !important;
+  transform: translateY(-1px);
+}
+
+/* Floating Menu Button (Le bouton pour ouvrir la sidebar) */
+.menu-button {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  z-index: 30;
+  background-color: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #1e293b;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.menu-button:hover {
+  background-color: #f8fafc;
+  border-color: #cbd5e1;
+  color: #2563eb;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .sidebar {
+    width: 85%; /* Presque toute la largeur sur mobile */
+  }
+}
+
+/* ── Ajouts CSS pour accueil.css ──────────────────────────────────────────── */
+
+/* Résumé scans actifs sous le formulaire */
+.active-scans-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 10px 14px;
+  background: rgba(34, 197, 94, 0.06);
+  border: 0.5px solid rgba(34, 197, 94, 0.2);
+  border-radius: 8px;
+  font-size: 12px;
+  color: #16a34a;
+}
+
+/* Item récent en cours */
+.recent-item--active {
+  cursor: default;
+  border-color: rgba(34, 197, 94, 0.25) !important;
+  background: rgba(34, 197, 94, 0.04) !important;
+}
+
+/* Bloc URL + badge dans la liste */
+.recent-url-block {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+
+.recent-url {
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Badge "En cours..." animé */
+.badge-scanning {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: #16a34a;
+  font-weight: 500;
+}
+
+.badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #22c55e;
+  animation: pulse-dot 1.2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.4; transform: scale(0.7); }
+}
+
+.recent-icon { flex-shrink: 0; }
+.recent-arrow { flex-shrink: 0; opacity: 0.4; }
+.recent-empty { font-size: 13px; color: #9ca3af; text-align: center; padding: 16px 0; }
+
+/* ── Ajouts CSS pour sidebar.css ──────────────────────────────────────────── */
+
+/* Icône nav avec badge */
+.nav-icon-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nav-badge {
+  position: absolute;
+  top: -5px;
+  right: -8px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ef4444;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: badge-pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Badge sur le bouton menu (hamburger) */
+.menu-button {
+  position: relative;
+}
+
+.menu-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ef4444;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid white;
+}
+
+@keyframes badge-pop {
+  from { transform: scale(0); }
+  to   { transform: scale(1); }
+}
+
+/* ── Panneau scans dans la sidebar ── */
+.scans-panel {
+  margin: 12px 0;
+  border: 0.5px solid rgba(34, 197, 94, 0.2);
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(34, 197, 94, 0.03);
+}
+
+.scans-panel-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #6b7280;
+  border-bottom: 0.5px solid rgba(34, 197, 94, 0.15);
+}
+
+.scans-panel-count {
+  background: #ef4444;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 999px;
+}
+
+.scans-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.scan-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border-bottom: 0.5px solid rgba(0,0,0,0.05);
+  transition: background 0.15s;
+}
+
+.scan-item:last-child { border-bottom: none; }
+
+.scan-item--completed { opacity: 0.85; }
+.scan-item--failed    { opacity: 0.6;  }
+
+.scan-status-icon { flex-shrink: 0; }
+.scan-ok   { color: #22c55e; }
+.scan-fail { color: #ef4444; }
+
+.scan-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.scan-url {
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.scan-progress {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.scan-view-btn {
+  font-size: 11px;
+  font-weight: 600;
+  color: #16a34a;
+  background: none;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+  padding: 3px 6px;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+
+.scan-view-btn:hover { background: rgba(34,197,94,0.1); }
+
+.scan-dismiss-btn {
+  font-size: 12px;
+  color: #9ca3af;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 3px 6px;
+  border-radius: 4px;
+  transition: color 0.15s;
+}
+
+.scan-dismiss-btn:hover { color: #ef4444; }
+
+/* spin utilitaire */
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}

@@ -12,55 +12,30 @@ import {
 } from "../../components/ui/input-otp";
 import { verifyLoginCode, sendEmailCode } from "../../services/auth.service";
 import toast from "react-hot-toast";
-import "./vérificationemail.css";
 
 export default function VerifyEmail() {
   const [otp, setOtp] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [isResending, setIsResending] = useState(false);
-  const [error, setError] = useState("");
-  const [timeLeft, setTimeLeft] = useState(600);
   const [cooldown, setCooldown] = useState(0);
+  const [error, setError] = useState("");
 
   const navigate = useNavigate();
   const location = useLocation();
-
   const email = location.state?.email || "";
 
- useEffect(() => {
-  if (!email) {
-    navigate("/login");
-  }
-}, [email, navigate]);
-
+  useEffect(() => {
+    if (!email) navigate("/login");
+  }, [email]);
 
   useEffect(() => {
-    if (timeLeft <= 0) return;
+    if (cooldown <= 0) return;
+    const t = setInterval(() => setCooldown(c => c - 1), 1000);
+    return () => clearInterval(t);
+  }, [cooldown]);
 
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => prev - 1);
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [timeLeft]);
-
-  useEffect(() => {
-  if (cooldown <= 0) return;
-  const t = setInterval(() => {
-    setCooldown((c) => c - 1);
-  }, 1000);
-  return () => clearInterval(t);
-}, [cooldown]);
-
- // ───── VERIFY ─────
   const handleVerify = async () => {
     if (otp.length !== 6) {
-      setError("Code à 6 chiffres requis");
-      return;
-    }
-
-    if (timeLeft <= 0) {
-      setError("Code expiré");
+      setError("Code invalide");
       return;
     }
 
@@ -68,114 +43,116 @@ export default function VerifyEmail() {
     setError("");
 
     try {
-      await verifyLoginCode({ email, code: otp }) as any;
-
+      await verifyLoginCode({ email, code: otp });
       navigate("/accueilpage");
-
     } catch (err: any) {
-      setError(
-  typeof err?.detail === "string"
-    ? err.detail
-    : err?.detail?.[0]?.msg || "Code invalide");
+      setError(err?.detail || "Code incorrect");
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleResend = async () => {
-  if (cooldown > 0) return;
+    if (cooldown > 0) return;
 
-  try {
-    await sendEmailCode(email);
-    setOtp("");
-    toast.success("Nouveau code envoyé");
-    setError("");
-    setTimeLeft(600);
-    setCooldown(30);
-  } catch (err: any) {
-  setError(
-    err?.response?.data?.detail ||
-    "Erreur lors de l'envoi"
-   );
-  }
-   finally {
-    setIsResending(false);
+    try {
+      await sendEmailCode(email);
+      setOtp("");
+      setCooldown(30);
+      toast.success("Code renvoyé");
+    } catch {
+      toast.error("Erreur envoi code");
+    }
+  };
 
- }
-};
-
-  const isOtpValid = /^\d{6}$/.test(otp);
+  const isValid = otp.length === 6;
 
   return (
-    <div className="verify-container">
-      <Card className="verify-card">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50 px-4">
 
-        <CardHeader className="verify-header">
-          <div className="verify-icon-wrapper">
-            <div className="verify-icon-box">
-              <Mail className="verify-icon" />
-            </div>
+      <Card className="w-full max-w-md rounded-2xl shadow-xl border border-blue-200">
+
+        {/* HEADER */}
+        <CardHeader className="text-center space-y-4">
+
+          {/* ICON */}
+          <div className="mx-auto w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center">
+            <Mail className="text-blue-600 w-7 h-7" />
           </div>
 
-          <CardTitle className="verify-title">
+          <CardTitle className="text-2xl font-semibold text-slate-900">
             Vérification email
           </CardTitle>
 
-          <CardDescription className="verify-description">
+          <CardDescription className="text-slate-600">
             Code envoyé à
           </CardDescription>
 
-          <p className="verify-email-label">{email}</p>
+          <p className="text-blue-600 font-medium text-sm break-all">
+            {email}
+          </p>
         </CardHeader>
 
-        <CardContent className="verify-content">
+        {/* CONTENT */}
+        <CardContent className="space-y-6">
 
-          <InputOTP
-            maxLength={6}
-            value={otp}
-            onChange={(value) => {
-              setOtp(value);
-              setError("");
-            }}
-          >
-            <InputOTPGroup>
-              {[0,1,2,3,4,5].map((i) => (
-                <InputOTPSlot key={i} index={i} />
-              ))}
-            </InputOTPGroup>
-          </InputOTP>
+          {/* OTP INPUT */}
+          <div className="flex justify-center">
+            <InputOTP value={otp} onChange={setOtp} maxLength={6}>
+              <InputOTPGroup className="flex gap-3">
+                {[0,1,2,3,4,5].map(i => (
+                  <InputOTPSlot
+                    key={i}
+                    index={i}
+                    className="w-12 h-12 border rounded-lg text-lg text-center
+                               focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                ))}
+              </InputOTPGroup>
+            </InputOTP>
+          </div>
 
-          {error && <p className="verify-error">{error}</p>}
+          {/* ERROR */}
+          {error && (
+            <p className="text-red-500 text-sm text-center">
+              {error}
+            </p>
+          )}
 
-
-          <div style={{ marginTop: 15, textAlign: "center" }}>
+          {/* RESEND */}
+          <div className="text-center">
             <button
               onClick={handleResend}
-              disabled={isResending || cooldown > 0}
-              className="verify-resend-btn"
+              disabled={cooldown > 0}
+              className="text-blue-600 text-sm hover:underline disabled:text-gray-400"
             >
               {cooldown > 0
                 ? `Renvoyer dans ${cooldown}s`
-                : isResending
-                ? "Envoi..."
                 : "Renvoyer le code"}
             </button>
           </div>
 
         </CardContent>
 
-        <CardFooter className="verify-footer">
+        {/* FOOTER */}
+        <CardFooter className="flex flex-col gap-3">
 
+          {/* VERIFY BUTTON */}
           <Button
             onClick={handleVerify}
-            disabled={isLoading || !isOtpValid}
-            className="verify-btn-submit"
+            disabled={!isValid || isLoading}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl py-2"
           >
             {isLoading ? "Vérification..." : "Vérifier"}
           </Button>
 
-          <Button variant="ghost" onClick={() => navigate(-1)}>
-            <ArrowLeft />
+          {/* BACK */}
+          <Button
+            variant="ghost"
+            onClick={() => navigate(-1)}
+            className="flex items-center gap-2 text-slate-700"
+          >
+            <ArrowLeft size={16} />
             Retour
           </Button>
 

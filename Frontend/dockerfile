@@ -1,29 +1,16 @@
-FROM node:20-alpine AS builder
-
+FROM node:alpine AS builder
 RUN apk update && apk upgrade
-
 WORKDIR /app
-
 COPY package*.json ./
 RUN npm install
-
 COPY . .
-
-# Build React (Vite)
 RUN npm run build
 
-# ── Serveur production avec Nginx ──
 FROM nginx:alpine
-
-# Copie le build Vite dans Nginx
 COPY --from=builder /app/dist /usr/share/nginx/html
-
-# Créer utilisateur non-root
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 RUN adduser -D appuser
-
 EXPOSE 80
-
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
   CMD wget --quiet --tries=1 --spider http://localhost:80 || exit 1
-
 CMD ["nginx", "-g", "daemon off;"]

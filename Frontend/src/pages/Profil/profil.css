@@ -1,236 +1,190 @@
+/* ===== VARIABLES ===== */
+:root {
+  --primary: #2563eb;
+  --bg: #f8fafc;
+  --text: #1e293b;
+  --border: #e2e8f0;
+}
+
+/* ===== CONTAINER ===== */
 .profile-container {
   min-height: 100vh;
-  background-color: #f1f5f9;
-  display: flex;
+  background-color: var(--bg);
+  font-family: sans-serif;
+  color: var(--text);
 }
 
+/* ===== WRAPPER ===== */
 .profile-wrapper {
-  flex: 1;
-  max-width: 800px;
-  margin: 40px auto;
-  padding: 0 20px;
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+  position: relative;
 }
 
+/* ===== HEADER ===== */
 .profile-main-title {
-  font-size: 1.8rem;
+  text-align: center;
+  font-size: 2rem;
   font-weight: 700;
-  color: #1e293b;
-  margin-bottom: 30px;
+  margin-bottom: 2rem;
 }
 
-/* Cartes */
+/* bouton retour */
+.back-to-home-circle {
+  position: absolute;
+  left: 0;
+  top: 2rem;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px;
+  color: var(--text);
+}
+
+.back-to-home-circle:hover {
+  border-color: var(--primary);
+}
+
+/* ===== CARD ===== */
 .profile-card {
   background: white;
-  padding: 28px;
+  padding: 1.5rem;
   border-radius: 12px;
-  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
-  margin-bottom: 24px;
-  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.08);
+  margin-bottom: 1.5rem;
 }
 
+/* ===== SECTION TITLE ===== */
 .card-section-label {
+  font-size: 0.9rem;
   font-weight: 600;
-  font-size: 1rem;
-  margin-bottom: 20px;
+  margin-bottom: 1rem;
   color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.025em;
 }
 
-/* Champs et Grille */
+/* ===== GRID ===== */
 .profile-name-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-  margin-bottom: 16px;
-}
-
-.field-group {
-  margin-bottom: 16px;
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
+.profile-name-grid .field-group {
+  flex: 1;
+}
+
+/* ===== FIELD ===== */
+.field-group {
+  margin-bottom: 1rem;
+}
+
+.field-group label {
+  display: block;
+  font-size: 0.85rem;
+  margin-bottom: 0.3rem;
+}
+
+/* ===== INPUT ===== */
 .input-wrapper {
   position: relative;
   display: flex;
   align-items: center;
 }
 
+.input-wrapper input {
+  width: 100%;
+}
+
+/* disabled */
 .input-disabled {
-  background-color: #f8fafc !important;
-  color: #94a3b8 !important;
-  border-color: #e2e8f0 !important;
+  background: #f1f5f9;
   cursor: not-allowed;
 }
 
-/* Boutons */
+/* ===== EYE BUTTON ===== */
 .eye-btn {
   position: absolute;
-  right: 12px;
+  right: 10px;
   background: none;
   border: none;
-  color: #94a3b8;
   cursor: pointer;
-  padding: 4px;
+  color: #94a3b8;
 }
 
+.eye-btn:hover {
+  color: var(--primary);
+}
+
+/* ===== ACTIONS ===== */
 .profile-actions {
   display: flex;
-  gap: 12px;
-  margin-top: 20px;
-  padding-top: 20px;
-  border-top: 1px solid #f1f5f9;
+  gap: 10px;
+  margin-top: 10px;
 }
 
 .btn-save {
-  background: #2563eb !important;
+  background: var(--primary);
   color: white;
 }
 
 .btn-cancel {
-  background: #f1f5f9 !important;
-  color: #475569 !important;
-  border: 1px solid #e2e8f0 !important;
+  background: white;
+  border: 1px solid var(--border);
 }
 
+.btn-cancel:hover {
+  border-color: var(--primary);
+}
+
+/* ===== PASSWORD BUTTON ===== */
 .btn-pwd {
   width: 100%;
   margin-top: 10px;
-  background: #1e293b !important;
+  background: var(--primary);
   color: white;
 }
 
-.btn-pwd:disabled {
-  background: #cbd5e1 !important;
-  cursor: not-allowed;
-}
-
-/* RÈGLES DE MOT DE PASSE */
-.password-rules-profile {
-  list-style: none;
-  padding: 12px;
-  margin-top: 10px;
-  background: #f8fafc;
-  border-radius: 8px;
-  border: 1px solid #e2e8f0;
-}
-
-.rule {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
-  font-size: 0.8rem;
-  color: #64748b;
-}
-
-.rule.valid {
-  color: #10b981;
-}
-
-.rule.invalid {
-  color: #ef4444;
-}
-
-.rule.pending {
-  color: #94a3b8;
-}
-
-/* Message de succès */
+/* ===== SUCCESS BANNER ===== */
 .success-banner {
-  background-color: #f0fdf4;
-  color: #166534;
-  padding: 12px;
-  border-radius: 8px;
-  margin-bottom: 20px;
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 0.9rem;
-  font-weight: 500;
-  border: 1px solid #bbf7d0;
-}
-
-.profile-loading {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 100vh;
-  font-weight: 500;
-  color: #64748b;
-}
-
-@media (max-width: 640px) {
-  .profile-name-grid {
-    grid-template-columns: 1fr;
-  }
-}
-/* Container des règles sous l'input */
-.password-rules-profile {
-  list-style: none;
-  padding: 12px;
-  margin-top: 8px;
-  background-color: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  display: flex;
-  flex-direction: column;
   gap: 6px;
+  background: #ecfdf5;
+  color: #16a34a;
+  padding: 8px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  margin-bottom: 1rem;
 }
 
-/* Style de chaque ligne de règle */
+/* ===== PASSWORD RULES ===== */
+.password-rules-profile {
+  margin-top: 8px;
+  padding-left: 0;
+  list-style: none;
+  font-size: 0.75rem;
+}
+
 .rule {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 0.75rem;
-  font-weight: 500;
-  transition: all 0.2s ease;
+  gap: 6px;
+  margin-bottom: 4px;
 }
 
-/* Couleurs dynamiques selon l'état */
-.rule.pending {
-  color: #94a3b8; /* Gris */
-}
+/* états */
+.rule.valid { color: #16a34a; }
+.rule.invalid { color: #dc2626; }
+.rule.pending { color: #94a3b8; }
 
-.rule.valid {
-  color: #10b981; /* Vert */
-}
-
-.rule.invalid {
-  color: #ef4444; /* Rouge */
-}
-
-.back-to-home-circle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  background-color: white;
+/* ===== LOADING ===== */
+.profile-loading {
+  text-align: center;
+  padding: 3rem;
   color: #64748b;
-  border-radius: 50%; /* Cercle parfait */
-  border: 1px solid #e2e8f0;
-  text-decoration: none;
-  margin-bottom: 20px;
+}
+
+/* ===== HOVER GLOBAL ===== */
+button {
   transition: all 0.2s ease;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-}
-
-.back-to-home-circle:hover {
-  color: #2563eb;
-  background-color: #f8fafc;
-  border-color: #3b82f6;
-  transform: translateX(-4px); /* Petit effet de glissement vers la gauche */
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-}
-
-.profile-main-title {
-  margin-top: 5px;
-  margin-bottom: 25px;
-  font-size: 1.8rem;
-  font-weight: 700;
-  color: #1e293b;
 }

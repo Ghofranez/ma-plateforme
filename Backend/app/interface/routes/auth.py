@@ -12,17 +12,22 @@ from app.application.services import otp
 
 router = APIRouter()
 
+
+# Injection du use case
 def get_use_case(db: Session = Depends(get_db)):
     return AuthUseCases(UserRepository(db))
 
+# Inscription
 @router.post("/register")
 def register(user: UserCreate, uc: AuthUseCases = Depends(get_use_case)):
     return uc.register(user.nom, user.prenom, user.cin, user.email, user.password, user.confirm_password)
 
+#Login
 @router.post("/login")
 def login(user: UserLogin, uc: AuthUseCases = Depends(get_use_case)):
     return uc.login(user.email, user.password)
 
+#Envoi code email
 @router.post("/send-email-code")
 def send_email_code(data: EmailRequest, db: Session = Depends(get_db)):
     repo = UserRepository(db)
@@ -35,11 +40,11 @@ def send_email_code(data: EmailRequest, db: Session = Depends(get_db)):
     otp.store_login_code(data.email)
     return {"message": "Code sent"}
 
-# ── verify-login-code — envoie le token dans un cookie ──
+# verify-login-code: envoie le token dans un cookie
 @router.post("/verify-login-code")
 def verify_login_code(
     data: VerifyLoginCode,
-    response: Response,           # ← ajouter Response
+    response: Response,
     uc: AuthUseCases = Depends(get_use_case)
 ):
     if not otp.verify_login_code(data.email, data.code):
@@ -50,6 +55,7 @@ def verify_login_code(
 
     return {"message": "Login successful"}
 
+#Reset mot de passe
 @router.post("/forgot-password")
 def forgot_password(data: EmailRequest, uc: AuthUseCases = Depends(get_use_case)):
     return uc.forgot_password(data.email)

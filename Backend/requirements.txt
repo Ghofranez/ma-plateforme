@@ -1,10 +1,11 @@
+setuptools # a supprimer
 fastapi
 uvicorn[standard]
 sqlalchemy
 mysql-connector-python
 python-dotenv
 passlib[bcrypt]
-bcrypt==4.0.1 
+bcrypt==4.0.1
 pyjwt
 python-multipart
 pytest
@@ -12,3 +13,8 @@ httpx
 pytest-cov
 greenlet
 pydantic[email]
+celery[redis]==5.3.6
+redis==5.0.1
+requests
+pydantic-settings
+builtwith

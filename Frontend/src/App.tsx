@@ -10,11 +10,14 @@ import Verificationmdp from './pages/Verificationmdp/verificationmdp'
 import Accueilpage from "./pages/Accueilpage/accueilpage";
 import Profil from "./pages/Profil/profil"
 import Historique from "./pages/Historique/historique"
+import Rapport from "./pages/Rapport/rapport";
+import { ScanProvider } from "./context/Scancontext";
 
 function App() {
   return (
     <>
     <Toaster position="top-right" />
+    <ScanProvider>
     <Container>
       <div className='App'>
         <Router>
@@ -29,11 +32,13 @@ function App() {
             <Route path='/accueilpage' element={<Accueilpage/>} />
             <Route path='/profil' element={<Profil/>} />
             <Route path='/historique' element={<Historique/>} />
+            <Route path='/rapport/:id' element={<Rapport />} />
           </Routes>
         </Router>
       </div>
 
     </Container>
+    </ScanProvider>
     </>
   )
 }

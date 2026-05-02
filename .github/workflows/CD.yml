@@ -20,7 +20,7 @@ jobs:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: self-hosted
     outputs:
-      backend_image: ${{ steps.set-images.outputs.backend }}
+      backend_image:  ${{ steps.set-images.outputs.backend }}
       frontend_image: ${{ steps.set-images.outputs.frontend }}
     steps:
       - name: Checkout
@@ -30,7 +30,7 @@ jobs:
         id: set-images
         run: |
           OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-          echo "backend=ghcr.io/${OWNER}/my-backend:latest" >> $GITHUB_OUTPUT
+          echo "backend=ghcr.io/${OWNER}/my-backend:latest"   >> $GITHUB_OUTPUT
           echo "frontend=ghcr.io/${OWNER}/my-frontend:latest" >> $GITHUB_OUTPUT
 
       - name: Login GHCR
@@ -76,17 +76,24 @@ jobs:
 
       - name: Create .env file
         run: |
-          echo "MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }}" > .env
-          echo "MYSQL_DATABASE=${{ secrets.MYSQL_DATABASE }}" >> .env
-          echo "MYSQL_USER=${{ secrets.MYSQL_USER }}" >> .env
-          echo "MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }}" >> .env
-          echo "DATABASE_URL=${{ secrets.DATABASE_URL }}" >> .env
-          echo "SECRET_KEY=${{ secrets.SECRET_KEY }}" >> .env
-          echo "SMTP_EMAIL=${{ secrets.SMTP_EMAIL }}" >> .env
-          echo "SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}" >> .env
-          echo "BACKEND_IMAGE=${{ needs.cosign-verify.outputs.backend_image }}" >> .env
-          echo "FRONTEND_IMAGE=${{ needs.cosign-verify.outputs.frontend_image }}" >> .env
-          cat .env
+          cat > .env << EOF
+          MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }}
+          MYSQL_DATABASE=${{ secrets.MYSQL_DATABASE }}
+          MYSQL_USER=${{ secrets.MYSQL_USER }}
+          MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }}
+          DATABASE_URL=${{ secrets.DATABASE_URL }}
+          SECRET_KEY=${{ secrets.SECRET_KEY }}
+          SMTP_EMAIL=${{ secrets.SMTP_EMAIL }}
+          SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}
+          REDIS_URL=${{ secrets.REDIS_URL }}
+          VIRUSTOTAL_KEY=${{ secrets.VIRUSTOTAL_KEY }}
+          GOOGLE_SAFE_BROWSING_KEY=${{ secrets.GOOGLE_SAFE_BROWSING_KEY }}
+          URLSCAN_API_KEY=${{ secrets.URLSCAN_API_KEY }}
+          BACKEND_IMAGE=${{ needs.cosign-verify.outputs.backend_image }}
+          FRONTEND_IMAGE=${{ needs.cosign-verify.outputs.frontend_image }}
+          EOF
+          echo "=== .env créé (clés masquées) ==="
+          cat .env | sed 's/=.*/=***/'
 
       - name: Login GHCR
         run: |
@@ -118,7 +125,7 @@ jobs:
       - name: Health Check Backend
         run: |
           for i in {1..15}; do
-            if curl -sf http://localhost:8000/; then
+            if curl -sf http://localhost:8000/health; then
               echo "Backend opérationnel "
               exit 0
             fi
@@ -132,7 +139,7 @@ jobs:
         run: |
           for i in {1..10}; do
             if curl -sf http://localhost:3000/; then
-              echo "Frontend opérationnel "
+              echo "Frontend opérationnel ✓"
               exit 0
             fi
             echo "Tentative $i/10 — attente 5s..."
@@ -140,6 +147,17 @@ jobs:
           done
           echo "Frontend ne répond pas après 10 tentatives !"
           exit 1
+
+      - name: Health Check Worker (Celery)
+        run: |
+          # Vérifie que le worker Celery est bien actif
+          WORKER=$(docker ps --filter "name=worker" --format "{{.Status}}" | head -1)
+          if [[ "$WORKER" != *"Up"* ]]; then
+            echo "Worker Celery non actif — vérifier les logs !"
+            docker logs $(docker ps --filter "name=worker" -q) --tail 50
+            exit 1
+          fi
+          echo "Worker Celery opérationnel "
 
   ########################################################
   # JOB 4 — OWASP ZAP DAST
@@ -225,13 +243,25 @@ jobs:
           docker ps
           echo "======================================="
 
-      - name: Check Container Count
+      - name: Check Required Containers
         run: |
-          COUNT=$(docker ps --filter "status=running" \
-            --format '{{.Names}}' | wc -l)
-          echo "Nombre de conteneurs actifs : $COUNT"
-          if [ "$COUNT" -lt 2 ]; then
-            echo "Moins de 2 conteneurs actifs !"
+          # Vérifie que chaque service critique tourne
+          REQUIRED=("db" "redis" "backend" "worker" "frontend")
+          ALL_OK=true
+
+          for SERVICE in "${REQUIRED[@]}"; do
+            STATUS=$(docker ps --filter "name=${SERVICE}" \
+              --format "{{.Status}}" | head -1)
+            if [[ "$STATUS" == *"Up"* ]]; then
+              echo " ${SERVICE} : ${STATUS}"
+            else
+              echo " ${SERVICE} : NON ACTIF"
+              ALL_OK=false
+            fi
+          done
+
+          if [ "$ALL_OK" = false ]; then
+            echo "Un ou plusieurs conteneurs critiques sont inactifs !"
             exit 1
           fi
           echo "Tous les conteneurs sont actifs "
@@ -251,8 +281,10 @@ jobs:
       - name: Rollback Docker Compose
         run: |
           echo "=== ROLLBACK EN COURS ==="
-          docker compose down
-          docker compose up -d
+          docker compose -f docker-compose.prod.yml down
+          docker compose -f docker-compose.prod.yml up -d
+          sleep 15
+          docker ps
           echo "=== ROLLBACK TERMINÉ ==="
 
       - name: Verify Rollback
@@ -273,7 +305,7 @@ jobs:
       - name: Notify Success
         if: ${{ needs.verify-containers.result == 'success' }}
         run: |
-          echo "Déploiement réussi !"
+          echo " Déploiement réussi !"
           echo "Backend  : ${{ needs.cosign-verify.outputs.backend_image }}"
           echo "Frontend : ${{ needs.cosign-verify.outputs.frontend_image }}"
 

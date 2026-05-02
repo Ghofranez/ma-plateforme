@@ -11,7 +11,7 @@ export const loginUser    = (data: any) => api.post("/login", data);
 // EMAIL VERIFICATION (2FA login)
 // ─────────────────────────────
 export const sendEmailCode = (email: string) =>
-  api.post("/send-email-code", { email }); 
+  api.post("/send-email-code", { email });
 
 export const verifyLoginCode = (data: {
   email: string;
@@ -45,7 +45,21 @@ export const changePassword = (data: any) => api.put("/change-password", data);
 // ─────────────────────────────
 // ANALYSE & HISTORIQUE
 // ─────────────────────────────
-export const analyzeUrl = (url: string) => api.post("/analyze", { url });
+
 export const getHistory = () => api.get("/history");
+
+// Lancer une analyse
+export const analyzeUrl = (url: string) =>
+  api.post("/analyze", { url });
+
+// Vérifier le statut de la tâche
+export const getTaskStatus = (taskId: string) =>
+  api.get(`/analyze/status/${taskId}`);
+
+export const getReportById = (id: string) =>
+  api.get(`/analyze/report/${id}`)
+
+export const deleteHistoryItem = (id: string) =>
+  api.delete(`/history/${id}`);
 
 export const logout = () => api.post("/logout");

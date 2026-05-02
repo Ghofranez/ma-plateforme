@@ -1,54 +1,55 @@
-from datetime import datetime, timedelta, timezone  # ← ajoute timezone
+import redis
+import random
+import string
+from app.core.config import settings
 from app.application.services.email import send_verification_email
-import random, string
 
-email_verification = {}
-reset_verification  = {}
-last_sent           = {}
+# Connexion Redis — même URL que Celery dans ton .env
+r = redis.from_url(settings.REDIS_URL, decode_responses=True)
 
-def _now():
-    return datetime.now(timezone.utc)  # ← fonction utilitaire
 
 def generate_code() -> str:
+    # Génère un code à 6 chiffres aléatoires
     return ''.join(random.SystemRandom().choices(string.digits, k=6))
 
+
+# ── LOGIN 2FA ──────────────────────────────────────────────────────────────
 def store_login_code(email: str):
     code = generate_code()
-    email_verification[email] = {
-        "code": code,
-        "expires": _now() + timedelta(minutes=10)
-    }
+    r.setex(f"otp:login:{email}", 600, code)  # expire automatiquement en 10 min
     send_verification_email(email, code)
+
 
 def verify_login_code(email: str, code: str) -> bool:
-    session = email_verification.get(email)
-    if not session: return False
-    if session["expires"] < _now(): return False
-    if session["code"] != code: return False
-    email_verification.pop(email, None)
+    stored = r.get(f"otp:login:{email}")
+    if not stored or stored != code:
+        return False
+    r.delete(f"otp:login:{email}")  # supprimer après usage (code à usage unique)
     return True
 
+
+# ── RESET MOT DE PASSE ─────────────────────────────────────────────────────
 def store_reset_code(email: str):
     code = generate_code()
-    reset_verification[email] = {
-        "code": code,
-        "expires": _now() + timedelta(minutes=10)
-    }
+    r.setex(f"otp:reset:{email}", 600, code)  # expire automatiquement en 10 min
     send_verification_email(email, code)
 
+
 def verify_reset_code(email: str, code: str) -> bool:
-    session = reset_verification.get(email)
-    if not session: return False
-    if session["expires"] < _now(): return False
-    if session["code"] != code: return False
+    stored = r.get(f"otp:reset:{email}")
+    if not stored or stored != code:
+        return False
     return True
 
-def clear_reset_code(email: str):
-    reset_verification.pop(email, None)
 
+def clear_reset_code(email: str):
+    r.delete(f"otp:reset:{email}")
+
+
+# ── ANTI-SPAM : cooldown 30 secondes entre deux envois ─────────────────────
 def check_cooldown(email: str) -> bool:
-    last = last_sent.get(email)
-    if last and (_now() - last).seconds < 30:
-        return False
-    last_sent[email] = _now()
+    key = f"otp:cooldown:{email}"
+    if r.exists(key):
+        return False  # encore en cooldown
+    r.setex(key, 30, "1")  # bloquer pendant 30 secondes
     return True

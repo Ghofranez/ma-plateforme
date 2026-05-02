@@ -7,6 +7,8 @@
 
   "compilerOptions": {
     "ignoreDeprecations": "6.0",
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
     "baseUrl": ".",
     "paths": {
       "@/*": ["Frontend/src/*"]

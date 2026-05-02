@@ -3,18 +3,16 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from app.core.config import settings
 
+# Fonction pour envoyer un email de vérification avec un code OTP
 
 def send_verification_email(email: str, code: str):
-    """
-    Envoie un email contenant le code OTP à l'utilisateur.
-    Utilisé pour : login 2FA + reset mot de passe
-    """
 
     msg = MIMEMultipart()
     msg["From"]    = settings.SMTP_EMAIL
     msg["To"]      = email
     msg["Subject"] = "Code de vérification"
 
+# Corps du mail en HTML
     body = f"""
     <div style="font-family: Arial, sans-serif; max-width: 400px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
         <h2 style="color: #333;">Vérification de votre compte</h2>
@@ -30,6 +28,7 @@ def send_verification_email(email: str, code: str):
     msg.attach(MIMEText(body, "html"))
 
     try:
+         # Connexion au serveur Gmail
         server = smtplib.SMTP_SSL("smtp.gmail.com", 465)
         server.login(settings.SMTP_EMAIL, settings.SMTP_PASSWORD)
         server.sendmail(settings.SMTP_EMAIL, email, msg.as_string())

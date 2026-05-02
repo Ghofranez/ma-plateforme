@@ -74,6 +74,11 @@ jobs:
       SECRET_KEY: ${{ secrets.SECRET_KEY }}
       SMTP_EMAIL: ${{ secrets.SMTP_EMAIL }}
       SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+       # Clés des outils de scan
+      VIRUSTOTAL_KEY:           ${{ secrets.VIRUSTOTAL_KEY }}
+      GOOGLE_SAFE_BROWSING_KEY: ${{ secrets.GOOGLE_SAFE_BROWSING_KEY }}
+      URLSCAN_API_KEY:          ${{ secrets.URLSCAN_API_KEY }}
+
     steps:
       - uses: actions/checkout@v4
       - name: Install Dependencies
@@ -280,7 +285,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.Pat_TOKEN }}
+          password: ${{ secrets.PAT_TOKEN}}
       - name: Pull Images
         run: |
           docker pull ${{ needs.docker-build.outputs.backend_image }}
