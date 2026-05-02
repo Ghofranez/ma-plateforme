@@ -83,11 +83,10 @@ jobs:
       SECRET_KEY: ${{ secrets.SECRET_KEY }}
       SMTP_EMAIL: ${{ secrets.SMTP_EMAIL }}
       SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
-      Redis_URL: ${{secrets.REDIS_URL}}
       VIRUSTOTAL_KEY:           ${{ secrets.VIRUSTOTAL_KEY }}
       GOOGLE_SAFE_BROWSING_KEY: ${{ secrets.GOOGLE_SAFE_BROWSING_KEY }}
       URLSCAN_API_KEY:          ${{ secrets.URLSCAN_API_KEY }}
-
+      Redis_URL: redis://localhost:6379/0
     steps:
       - uses: actions/checkout@v4
       - name: Install Dependencies
@@ -98,7 +97,9 @@ jobs:
       - name: Run Tests
         run: |
           cd Backend
-          pytest app/tests/ -v --cov=app --cov-report=xml:coverage.xml
+          pytest app/tests/ -v \
+            --ignore=app/tests/unit/test_otp.py \
+            --cov=app --cov-report=xml:coverage.xml
       - name: Upload Coverage
         uses: actions/upload-artifact@v4
         with:

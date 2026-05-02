@@ -75,9 +75,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Save previous SHA for rollback   # ← AJOUTER
+      - name: Save previous SHA for rollback
         run: |
-          docker inspect ghcr.io/${{ github.repository_owner }}/my-backend:latest \
+           docker inspect ghcr.io/${{ github.repository_owner }}/my-backend:latest \
            --format='{{index .RepoDigests 0}}' > /tmp/previous_backend.txt 2>/dev/null || echo "" > /tmp/previous_backend.txt
            docker inspect ghcr.io/${{ github.repository_owner }}/my-frontend:latest \
            --format='{{index .RepoDigests 0}}' > /tmp/previous_frontend.txt 2>/dev/null || echo "" > /tmp/previous_frontend.txt
@@ -291,7 +291,7 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
-    - name: Rollback to previous version   # ← REMPLACER l'ancien rollback
+    - name: Rollback to previous version
       run: |
         echo "=== ROLLBACK EN COURS ==="
 
