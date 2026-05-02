@@ -1,4 +1,3 @@
-setuptools # a supprimer
 fastapi
 uvicorn[standard]
 sqlalchemy
