@@ -109,7 +109,6 @@ services:
       - "3000:80"
     networks:
       - internal
-      - backend
 
 # ── Réseau interne ────────────────────────────────────────────────────────
 networks:
