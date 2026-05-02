@@ -75,6 +75,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Save previous SHA for rollback   # ← AJOUTER
+        run: |
+          docker inspect ghcr.io/${{ github.repository_owner }}/my-backend:latest \
+           --format='{{index .RepoDigests 0}}' > /tmp/previous_backend.txt 2>/dev/null || echo "" > /tmp/previous_backend.txt
+           docker inspect ghcr.io/${{ github.repository_owner }}/my-frontend:latest \
+           --format='{{index .RepoDigests 0}}' > /tmp/previous_frontend.txt 2>/dev/null || echo "" > /tmp/previous_frontend.txt
+           echo "Version précédente sauvegardée"
+
       - name: Create .env file
         run: |
           cat > .env << EOF
@@ -280,23 +288,39 @@ jobs:
     runs-on: self-hosted
     if: failure()
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+    - name: Checkout
+      uses: actions/checkout@v4
 
-      - name: Rollback Docker Compose
-        run: |
-          echo "=== ROLLBACK EN COURS ==="
-          docker compose -f docker-compose.prod.yml down
-          docker compose -f docker-compose.prod.yml up -d
-          sleep 15
-          docker ps
-          echo "=== ROLLBACK TERMINÉ ==="
+    - name: Rollback to previous version   # ← REMPLACER l'ancien rollback
+      run: |
+        echo "=== ROLLBACK EN COURS ==="
 
-      - name: Verify Rollback
-        run: |
-          sleep 10
-          docker ps
-          echo "Rollback effectué "
+        PREV_BACKEND=$(cat /tmp/previous_backend.txt || echo "")
+        PREV_FRONTEND=$(cat /tmp/previous_frontend.txt || echo "")
+
+        if [ -z "$PREV_BACKEND" ] || [ -z "$PREV_FRONTEND" ]; then
+          echo "Pas de version précédente trouvée — rollback impossible !"
+          exit 1
+        fi
+
+        # Retagger l'ancienne image comme latest
+        docker pull "$PREV_BACKEND"
+        docker tag  "$PREV_BACKEND" ghcr.io/${{ github.repository_owner }}/my-backend:latest
+
+        docker pull "$PREV_FRONTEND"
+        docker tag  "$PREV_FRONTEND" ghcr.io/${{ github.repository_owner }}/my-frontend:latest
+
+        # Redémarrer avec l'ancienne version
+        docker compose -f docker-compose.prod.yml down
+        docker compose -f docker-compose.prod.yml up -d
+        sleep 15
+        docker ps
+        echo "=== ROLLBACK TERMINÉ — version précédente restaurée ==="
+
+    - name: Verify Rollback
+      run: |
+        sleep 10
+        curl -sf http://localhost:8000/health && echo "Backend OK après rollback" || echo "Backend toujours KO !"
 
   ########################################################
   # JOB 8 — NOTIFICATIONS
