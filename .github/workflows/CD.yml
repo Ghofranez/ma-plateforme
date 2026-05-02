@@ -122,7 +122,16 @@ jobs:
           sleep 30
           docker ps
           echo "=== DÉPLOIEMENT TERMINÉ ==="
+      - name: Debug — logs backend
+        run: |
+           echo "=== STATUS CONTENEURS ==="
+           docker ps -a
+           echo "=== LOGS BACKEND ==="
+           docker logs $(docker ps -a --filter "name=backend" -q) --tail 50
+           echo "=== LOGS DB ==="
+           docker logs $(docker ps -a --filter "name=db" -q) --tail 20
 
+           
   ########################################################
   # JOB 3 — HEALTH CHECK
   ########################################################
