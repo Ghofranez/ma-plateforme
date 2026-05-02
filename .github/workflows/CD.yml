@@ -131,7 +131,7 @@ jobs:
            echo "=== LOGS DB ==="
            docker logs $(docker ps -a --filter "name=db" -q) --tail 20
 
-           
+
   ########################################################
   # JOB 3 — HEALTH CHECK
   ########################################################
@@ -144,7 +144,7 @@ jobs:
       - name: Health Check Backend
         run: |
           for i in {1..15}; do
-            if curl -sf http://localhost:8000/health; then
+            if curl -sf http://localhost:8000/; then
               echo "Backend opérationnel "
               exit 0
             fi
