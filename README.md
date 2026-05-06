@@ -119,10 +119,10 @@ Avant de lancer le projet en local, les outils suivants doivent etre installes s
 
 6. Lancer le projet en local
 1- Cloner le dépot:
-- git clone https://github.com/Ghofranez/pipeline-test.git
-- cd pipeline-test
+ - git clone https://github.com/Ghofranez/ma-plateforme.git
+ - cd ma-plateforme
 2- Créer le fichier .env.docker
-- Copier le contenu de .env.docker.example puis ajuster.
+ - Copier le contenu de .env.docker.example puis ajuster.
 
 3- Lancer Docker Compose:
 
