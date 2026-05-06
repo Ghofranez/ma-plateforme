@@ -17,3 +17,4 @@ redis==5.0.1
 requests
 pydantic-settings
 builtwith
+deep-translator==1.11.4

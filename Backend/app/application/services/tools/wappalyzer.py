@@ -88,11 +88,7 @@ def _normalize(name: str) -> str:
 
 def _assess_risk(tech_name: str, category: str = "") -> str:
     """
-    Détermine le niveau de risque d'une technologie selon 3 règles (par priorité) :
-      1. Correspondance exacte dans _RISKY_TECHNOLOGIES
-      2. Correspondance partielle (ex: "apache tomcat 9.0" contient "apache tomcat")
-      3. Catégorie sensible → risque medium par défaut
-      4. Sinon → low
+    Détermine le niveau de risque d'une technologie selon 3 règles (par priorité)
     """
     normalized = _normalize(tech_name)
 
@@ -171,9 +167,21 @@ def scan_wappalyzer(url: str) -> dict:
 
     # ── Étape 3 : Analyse builtwith ───────────────────────────────────────────
     try:
-        raw: dict = builtwith.parse(url)
+        import ssl
+        import requests
+        ssl._create_default_https_context = ssl._create_unverified_context
+
+        # Télécharger la page manuellement pour gérer l'encodage
+        response = requests.get(url, timeout=30, verify=False)
+        response.encoding = response.apparent_encoding or "utf-8"
+        html_content = response.text
+
+        # Passer le contenu HTML directement à builtwith
+        raw: dict = builtwith.parse(url, html=html_content)
+
+        ssl._create_default_https_context = ssl.create_default_context
+
     except Exception as e:
-        # Peut échouer si le site est hors ligne, protégé par Cloudflare, timeout…
         logger.warning(f"[Wappalyzer/builtwith] Échec de l'analyse pour {url} : {e}")
         return _failure(f"Erreur lors de l'analyse du site : {str(e)[:300]}")
 

@@ -6,26 +6,33 @@ from app.application.services.celery_app           import celery_app
 from app.infrastructure.db.session                 import SessionLocal
 from app.infrastructure.repositories.analysis_repo import AnalysisRepository
 from app.application.services.scanner              import run_full_scan
+from app.application.services.tools.zap_scanner import _translate, _ZAP_ALERT_EXPLANATIONS
+from app.application.services.tools.nuclei_scanner import (scan_nuclei, _translate_nuclei)
+from billiard.exceptions import SoftTimeLimitExceeded
+import logging
+logger = logging.getLogger(__name__)
 
 SEVERITY_ICONS = {
-    "Critique":  "🔴",
-    "Important": "🟠",
-    "Modéré":    "🟡",
-    "OK":        "🟢",
-    "Info":      "🔵",
-    "Erreur":    "⚪",
-    "Conseil":   "💡",
-    "Alerte":    "🚨",
+    "Critique":  "",
+    "Important": "",
+    "Modéré":    "",
+    "OK":        "",
+    "Info":      "",
+    "Erreur":    "",
+    "Conseil":   "",
+    "Alerte":    "",
 }
 
 SECTION_LABELS = {
-    "headers":       "🛡️  Protection du navigateur",
-    "ssl":           "🔒  Chiffrement HTTPS",
-    "virustotal":    "🦠  Antivirus (VirusTotal)",
-    "safe_browsing": "🌐  Google Safe Browsing",
-    "urlscan":       "🔍  Analyse comportementale (urlscan.io)",
-    "shodan":        "🖥️  Exposition du serveur (Shodan)",
-    "wappalyzer":    "🔬  Stack technologique (Wappalyzer)",
+    "headers":       "  Protection du navigateur",
+    "ssl":           "  Chiffrement HTTPS",
+    "virustotal":    "  Antivirus (VirusTotal)",
+    "safe_browsing": "  Google Safe Browsing",
+    "urlscan":       "  Analyse comportementale (urlscan.io)",
+    "shodan":        "  Exposition du serveur (Shodan)",
+    "wappalyzer":    "  Stack technologique (Wappalyzer)",
+    "zap":           "   Vulnérabilités web (OWASP ZAP)",
+    "nuclei":        "  Vulnérabilités ciblées (Nuclei)",
 }
 
 _SSL_SOURCE_NAMES = {
@@ -113,7 +120,6 @@ def _build_headers_recs(h: dict, recs: list) -> int:
 
     if h.get("status") == "failed":
         error_msg = str(h.get("error", ""))
-        # Erreur SSL certificate — message simplifié
         if "SSL" in error_msg or "certificate" in error_msg.lower() or "CERTIFICATE" in error_msg:
             _add(recs, "Important",
                  "Impossible de vérifier les protections de ce site car son certificat SSL est invalide ou auto-signé. "
@@ -160,7 +166,7 @@ def _build_headers_recs(h: dict, recs: list) -> int:
     for header in missing:
         if header in _HEADER_MEANINGS:
             severity, msg = _HEADER_MEANINGS[header]
-            _add(recs, severity, f"Header « {header} » absent — {msg}")
+            _add(recs, severity, f"En-tête « {header} » absent — {msg}")
         else:
             _add(recs, "Conseil",
                  f"Protection « {header} » absente — cette sécurité supplémentaire n'est pas activée.")
@@ -196,7 +202,7 @@ def _build_ssl_recs(s: dict, recs: list) -> int:
                  "Étape 3 — Activez HSTS : ajoutez l'en-tête "
                  "Strict-Transport-Security: max-age=31536000; includeSubDomains "
                  "pour forcer HTTPS définitivement dans le navigateur.")
-            return risk  # ← CRUCIAL : site HTTP = pas de certificat, on s'arrête ici
+            return risk
 
         elif "certificate" in error_msg or "ssl" in error_msg or error_type in ("ssl_error", "connection_failed"):
             risk += 20
@@ -266,7 +272,7 @@ def _build_ssl_recs(s: dict, recs: list) -> int:
         return risk
 
     if s.get("fallback_used"):
-        _add(recs, "Info", f"Analyse fallback utilisée ({src_name}). Grade : {grade_ssl}")
+        _add(recs, "Info", f"Analyse de secours utilisée ({src_name}). Grade : {grade_ssl}")
 
     cert = s.get("cert") or {}
     if not cert:
@@ -361,6 +367,7 @@ def _build_ssl_recs(s: dict, recs: list) -> int:
 
     return risk
 
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 3. VirusTotal
 # ─────────────────────────────────────────────────────────────────────────────
@@ -422,7 +429,7 @@ def _build_virustotal_recs(vt: dict, recs: list) -> int:
     if permalink:
         _add(recs, "Info", f"Rapport antivirus complet : {permalink}")
 
-# ── Détection phishing via catégories VT ──
+    # ── Détection phishing via catégories VT ──
     categories = vt.get("categories", {})
     if categories:
         phishing_votes = sum(
@@ -432,13 +439,13 @@ def _build_virustotal_recs(vt: dict, recs: list) -> int:
         if phishing_votes >= 2:
             risk += 45
             _add(recs, "Critique",
-                 f"Phishing confirmé par {phishing_votes} sources VirusTotal. "
+                 f"Hameçonnage confirmé par {phishing_votes} sources VirusTotal. "
                  "Ce site imite un site légitime pour voler vos identifiants. "
                  "Action : ne saisissez aucune information et fermez cet onglet.")
         elif phishing_votes == 1:
             risk += 10
             _add(recs, "Modéré",
-                 "1 source VirusTotal signale ce site comme phishing. "
+                 "1 source VirusTotal signale ce site comme hameçonnage. "
                  "Restez vigilant et évitez de saisir vos identifiants.")
 
     return risk
@@ -455,7 +462,7 @@ _THREAT_LABELS = {
         "Action : n'y accédez pas et signalez-le à votre administrateur système."
     ),
     "SOCIAL_ENGINEERING": (
-        "Critique", "du phishing",
+        "Critique", "du hameçonnage (phishing)",
         "Ce site imite une vraie entreprise pour voler vos identifiants. "
         "Action : ne saisissez aucun mot de passe et fermez cet onglet immédiatement."
     ),
@@ -510,7 +517,6 @@ def _build_safe_browsing_recs(sb: dict, recs: list) -> int:
     return risk
 
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # 5. urlscan.io — analyse comportementale
 # ─────────────────────────────────────────────────────────────────────────────
@@ -531,11 +537,11 @@ def _build_urlscan_recs(us: dict, recs: list) -> int:
                  "L'analyse comportementale a pris trop de temps — "
                  "le site répond lentement aux scanners automatiques.")
             _add(recs, "Info",
-                 "Les autres vérifications (VirusTotal, SSL, Headers) restent valides.")
+                 "Les autres vérifications (VirusTotal, SSL, En-têtes) restent valides.")
 
         elif error_type == "submission_blocked" or "block" in error_msg or "refused" in error_msg:
             _add(recs, "Info",
-                 "Ce site bloque les analyses automatiques (protection anti-bot active). "
+                 "Ce site bloque les analyses automatiques (protection anti-robot active). "
                  "Cela peut indiquer une sécurité renforcée, ou au contraire une dissimulation volontaire.")
             _add(recs, "Conseil",
                  "Pour analyser manuellement : rendez-vous sur urlscan.io, "
@@ -639,7 +645,7 @@ def _build_urlscan_recs(us: dict, recs: list) -> int:
     if domains_count or requests_count:
         _add(recs, "Info",
              f"Activité réseau : {requests_count} requête(s), "
-             f"{domains_count} domaine(s) externe(s), {unique_ips} IP distincte(s).")
+             f"{domains_count} domaine(s) externe(s), {unique_ips} adresse(s) IP distincte(s).")
 
     if domains_count > 30:
         risk += 5
@@ -656,26 +662,27 @@ def _build_urlscan_recs(us: dict, recs: list) -> int:
 
     return risk
 
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 6. Shodan
 # ─────────────────────────────────────────────────────────────────────────────
 
 _PORT_CATALOG: dict[int, tuple[str, str, bool]] = {
-    80:    ("HTTP",           "Serveur web standard",                         False),
-    443:   ("HTTPS",          "Serveur web sécurisé",                         False),
-    8080:  ("HTTP alternatif","Serveur web secondaire ou admin",               True),
-    21:    ("FTP",            "Transfert de fichiers non chiffré",             True),
-    22:    ("SSH",            "Accès distant sécurisé",                        False),
-    23:    ("Telnet",         "Connexion non chiffrée — très dangereux",       True),
-    25:    ("SMTP",           "Envoi d'e-mails — risque spam",                 True),
-    3306:  ("MySQL",          "Base de données — ne devrait pas être exposée", True),
-    5432:  ("PostgreSQL",     "Base de données — ne devrait pas être exposée", True),
-    6379:  ("Redis",          "Cache sans authentification par défaut",        True),
-    27017: ("MongoDB",        "Base de données — failles connues",             True),
-    9200:  ("Elasticsearch",  "Données lisibles sans auth",                    True),
-    445:   ("SMB",            "Partage Windows — exploité par WannaCry",       True),
-    3389:  ("RDP",            "Bureau à distance — cible brute-force",         True),
-    2375:  ("Docker HTTP",    "API Docker non sécurisée",                      True),
+    80:    ("HTTP",                "Serveur web standard",                                   False),
+    443:   ("HTTPS",               "Serveur web sécurisé",                                   False),
+    8080:  ("HTTP alternatif",     "Serveur web secondaire ou administration",                True),
+    21:    ("FTP",                 "Transfert de fichiers non chiffré",                       True),
+    22:    ("SSH",                 "Accès distant sécurisé",                                  False),
+    23:    ("Telnet",              "Connexion non chiffrée — très dangereux",                 True),
+    25:    ("SMTP",                "Envoi d'e-mails — risque de spam",                        True),
+    3306:  ("MySQL",               "Base de données — ne devrait pas être exposée",           True),
+    5432:  ("PostgreSQL",          "Base de données — ne devrait pas être exposée",           True),
+    6379:  ("Redis",               "Cache sans authentification par défaut",                  True),
+    27017: ("MongoDB",             "Base de données — failles connues",                       True),
+    9200:  ("Elasticsearch",       "Données lisibles sans authentification",                  True),
+    445:   ("SMB",                 "Partage Windows — exploité par WannaCry",                 True),
+    3389:  ("Bureau à distance",   "Accès bureau distant — cible d'attaques par force brute", True),
+    2375:  ("API Docker non sécurisée", "Interface Docker sans sécurité",                    True),
 }
 
 
@@ -729,7 +736,7 @@ def _build_shodan_recs(sh: dict, recs: list) -> int:
                     severity = "Modéré"; risk += 5
                 _add(recs, severity,
                      f"Port {port} ({service}) ouvert — {desc}. "
-                     "Action : fermez ce port dans votre pare-feu ou restreignez l'accès par IP.")
+                     "Action : fermez ce port dans votre pare-feu ou restreignez l'accès par adresse IP.")
     else:
         _add(recs, "Info", "Aucun port ouvert détecté par Shodan.")
 
@@ -737,10 +744,10 @@ def _build_shodan_recs(sh: dict, recs: list) -> int:
         if risk_level == "high":
             risk += 30
             _add(recs, "Critique",
-                 f"Le serveur a {len(cves)} faille(s) connue(s) (CVEs). "
+                 f"Le serveur a {len(cves)} faille(s) connue(s) (CVE). "
                  "Action : mettez à jour le système d'exploitation et les logiciels serveur immédiatement.")
             for cve in cves[:3]:
-                _add(recs, "Critique", f"Faille : {cve} — vérifiez le patch disponible sur cve.mitre.org.")
+                _add(recs, "Critique", f"Faille : {cve} — vérifiez le correctif disponible sur cve.mitre.org.")
             if len(cves) > 3:
                 _add(recs, "Critique", f"… et {len(cves) - 3} autre(s) faille(s) à corriger.")
         elif risk_level == "medium":
@@ -766,20 +773,20 @@ _TECH_EXPLANATIONS: dict[str, str] = {
                     "Action : mettez à jour vers la dernière version stable de Drupal.",
     "joomla":       "Joomla! est fréquemment ciblé par des attaques automatisées. "
                     "Action : mettez à jour Joomla! et désactivez les extensions inutilisées.",
-    "magento":      "Magento est ciblé pour le vol de données bancaires (skimming). "
+    "magento":      "Magento est ciblé pour le vol de données bancaires (écrémage). "
                     "Action : mettez à jour Magento et activez les correctifs de sécurité officiels.",
     "phpmyadmin":   "phpMyAdmin expose votre base de données sur Internet. "
-                    "Action : restreignez l'accès à une IP spécifique ou supprimez-le de l'accès public.",
-    "apache tomcat":"Apache Tomcat a des CVEs critiques. "
+                    "Action : restreignez l'accès à une adresse IP spécifique ou supprimez-le de l'accès public.",
+    "apache tomcat":"Apache Tomcat a des failles critiques connues. "
                     "Action : mettez à jour vers la dernière version stable et désactivez les servlets inutiles.",
     "struts":       "Apache Struts est à l'origine de la faille Equifax (2017). "
-                    "Action : mettez à jour vers la dernière version patchée immédiatement.",
-    "jquery":       "Les versions jQuery < 3.5 sont vulnérables aux attaques XSS. "
+                    "Action : mettez à jour vers la dernière version corrigée immédiatement.",
+    "jquery":       "Les versions jQuery inférieures à 3.5 sont vulnérables aux attaques XSS. "
                     "Action : mettez à jour jQuery vers la version 3.7 ou supérieure.",
-    "angularjs":    "AngularJS est en fin de vie depuis 2021 — plus aucun patch de sécurité. "
+    "angularjs":    "AngularJS est en fin de vie depuis 2021 — plus aucun correctif de sécurité. "
                     "Action : migrez vers Angular (version active) ou une alternative moderne.",
     "php":          "La version de PHP exposée peut être ciblée si elle est obsolète. "
-                    "Action : masquez la version PHP (expose_php = Off) et mettez à jour vers PHP 8.2+.",
+                    "Action : masquez la version PHP (expose_php = Off) et mettez à jour vers PHP 8.2 ou supérieur.",
 }
 
 
@@ -797,7 +804,7 @@ def _build_wappalyzer_recs(wa: dict, recs: list) -> int:
                  "Wappalyzer a dépassé le délai d'analyse. Le reste du scan reste valide.")
         else:
             _add(recs, "Erreur",
-                 f"L'analyse de la stack technologique a échoué : {error[:200]}")
+                 f"L'analyse de la pile technologique a échoué : {error[:200]}")
         return risk
 
     if wa.get("status") != "completed":
@@ -851,7 +858,7 @@ def _build_wappalyzer_recs(wa: dict, recs: list) -> int:
             msg = f"« {name} »{version_str} — {cats_str}. "
             msg += explanation or (
                 "Vérifiez que cette technologie est à jour. "
-                "Action : consultez le changelog et appliquez les correctifs de sécurité.")
+                "Action : consultez le journal des modifications et appliquez les correctifs de sécurité.")
             _add(recs, "Important", msg)
 
     versioned = [t for t in risk_technologies if t.get("version")]
@@ -866,13 +873,278 @@ def _build_wappalyzer_recs(wa: dict, recs: list) -> int:
         risk += 20
         _add(recs, "Critique",
              "phpMyAdmin est accessible publiquement. "
-             "Action immédiate : restreignez l'accès à une IP de confiance uniquement "
+             "Action immédiate : restreignez l'accès à une adresse IP de confiance uniquement "
              "ou supprimez-le de l'accès public.")
 
     all_names = [t["name"] for t in technologies[:10]]
     _add(recs, "Info",
-         f"Stack complète ({total} éléments) : {', '.join(all_names)}"
+         f"Pile complète ({total} éléments) : {', '.join(all_names)}"
          f"{'…' if total > 10 else ''}.")
+
+    return risk
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 8. OWASP ZAP
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _build_zap_recs(zap: dict, recs: list) -> int:
+    risk = 0
+
+    if not zap or zap.get("status") == "disabled":
+        _add(recs, "Info", "L'analyse OWASP ZAP n'est pas configurée.")
+        return risk
+
+    if zap.get("status") == "failed":
+        error_type = zap.get("error_type", "")
+
+        if error_type == "connection_error":
+            _add(recs, "Erreur",
+                 "OWASP ZAP n'est pas accessible — "
+                 "vérifiez que le conteneur ZAP est bien démarré (docker compose ps).")
+        elif error_type == "timeout":
+            _add(recs, "Info",
+                 "L'analyse OWASP ZAP a dépassé le délai imparti — "
+                 "le site répond lentement aux scanners. "
+                 "Les autres vérifications (VirusTotal, SSL, En-têtes) restent valides.")
+        elif error_type == "spider_failed":
+            _add(recs, "Info",
+                 "Le robot d'exploration ZAP n'a pas pu démarrer — "
+                 "le site bloque peut-être les robots automatiques.")
+        else:
+            _add(recs, "Erreur",
+                 f"L'analyse OWASP ZAP a échoué : {zap.get('error', 'erreur inconnue')[:150]}")
+        return risk
+
+    if zap.get("status") != "completed":
+        _add(recs, "Info", "Données OWASP ZAP non disponibles.")
+        return risk
+
+    alerts  = zap.get("alerts", {})
+    counts  = alerts.get("counts", {})
+    by_risk = alerts.get("by_risk", {})
+    total   = alerts.get("total", 0)
+
+    high   = counts.get("high",   0)
+    medium = counts.get("medium", 0)
+    low    = counts.get("low",    0)
+
+    if not zap.get("spider_completed"):
+        _add(recs, "Info",
+             "L'exploration ZAP a été interrompue avant la fin — "
+             "certaines pages du site n'ont pas pu être analysées.")
+
+    # ── Résumé global ──
+    if total == 0:
+        _add(recs, "OK",
+             "OWASP ZAP n'a détecté aucune vulnérabilité web connue sur ce site.")
+        return risk
+
+    if high > 0:
+        risk += min(high * 20, 40)
+        _add(recs, "Critique",
+             f"OWASP ZAP a détecté {high} vulnérabilité(s) critique(s) — "
+             f"ce site est activement exploitable. "
+             f"({medium} importante(s) et {low} mineure(s) également détectées.)")
+    elif medium > 0:
+        risk += min(medium * 10, 25)
+        _add(recs, "Important",
+             f"OWASP ZAP a détecté {medium} vulnérabilité(s) importante(s) "
+             f"et {low} mineure(s) sur ce site.")
+    elif low > 0:
+        risk += min(low * 3, 10)
+        _add(recs, "Modéré",
+             f"OWASP ZAP a détecté {low} vulnérabilité(s) mineure(s) — "
+             "risque faible mais des améliorations sont possibles.")
+
+    # ── Détail par niveau ──
+    for zap_risk, severity in [
+        ("High",   "Critique"),
+        ("Medium", "Important"),
+        ("Low",    "Modéré"),
+    ]:
+        alert_list = by_risk.get(zap_risk, [])
+        for alert in alert_list[:5]:
+            name_original   = alert.get("name_original", alert.get("name", ""))
+            name_translated = alert.get("name", "")
+            cweid           = alert.get("cweid", "")
+            cwe_str         = f" (CWE-{cweid})" if cweid and cweid != "0" else ""
+
+            explanation = None
+            for key, val in _ZAP_ALERT_EXPLANATIONS.items():
+                if key.lower() in name_original.lower() or key.lower() in name_translated.lower():
+                    explanation = val
+                    break
+
+            if explanation:
+                _add(recs, severity, f"« {name_translated} »{cwe_str} — {explanation}")
+            else:
+                name_auto         = _translate(name_original)
+                solution_original = alert.get("solution_original", alert.get("solution", ""))
+                solution_auto     = _translate(solution_original) if solution_original else ""
+
+                if solution_auto and solution_auto != solution_original:
+                    logger.info(
+                        "[ZAP TRADUIT AUTOMATIQUEMENT] nom=%s | solution=%s",
+                        name_original, solution_original[:200]
+                    )
+                    _add(recs, severity,
+                         f"« {name_auto} »{cwe_str} — "
+                         f"Action : {solution_auto[:200]}")
+                else:
+                    logger.warning(
+                        "[ZAP NON COUVERT] nom=%s | cweid=%s | solution=%s",
+                        name_original, cweid, solution_original[:200]
+                    )
+                    _add(recs, severity,
+                         f"« {name_translated} »{cwe_str} — "
+                         "Une faille de sécurité a été détectée sur votre site. "
+                         "Consultez un développeur pour analyser et corriger ce problème.")
+
+        if len(alert_list) > 5:
+            _add(recs, "Info",
+                 f"… et {len(alert_list) - 5} autre(s) alerte(s) "
+                 f"de niveau {zap_risk} non affichées.")
+
+    return risk
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 9. Nuclei
+# ─────────────────────────────────────────────────────────────────────────────
+
+_NUCLEI_SEVERITY_MAP = {
+    "critical": ("Critique",  40),
+    "high":     ("Important", 20),
+    "medium":   ("Modéré",    10),
+    "low":      ("Conseil",    3),
+    "info":     ("Info",       0),
+}
+
+
+def _build_nuclei_recs(nu: dict, recs: list) -> int:
+    risk = 0
+
+    if not nu or nu.get("status") == "disabled":
+        _add(recs, "Info", "L'analyse Nuclei n'est pas configurée.")
+        return risk
+
+    if nu.get("status") == "failed":
+        error_type = nu.get("error_type", "")
+        if error_type == "not_installed":
+            _add(recs, "Erreur",
+                 "Nuclei n'est pas installé sur ce serveur. "
+                 "Installez-le avec : go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest")
+        elif error_type == "timeout":
+            _add(recs, "Info",
+                 "L'analyse Nuclei a dépassé le délai imparti. "
+                 "Le site répond lentement — les autres vérifications restent valides.")
+        elif error_type == "invalid_url":
+            _add(recs, "Erreur", "URL invalide pour l'analyse Nuclei.")
+        elif error_type == "templates_missing":
+            _add(recs, "Erreur",
+                 "Les modèles Nuclei sont introuvables sur ce serveur. "
+                 "Exécutez nuclei -update-templates pour les télécharger.")
+        else:
+            _add(recs, "Erreur",
+                 f"L'analyse Nuclei a échoué : {nu.get('error', 'erreur inconnue')[:150]}")
+        return risk
+
+    if nu.get("status") != "completed":
+        _add(recs, "Info", "Données Nuclei non disponibles.")
+        return risk
+
+    findings = nu.get("findings", [])
+    counts   = nu.get("counts",   {})
+    total    = nu.get("total",    0)
+
+    if total == 0:
+        _add(recs, "OK", "Nuclei n'a détecté aucune vulnérabilité connue sur ce site.")
+        return risk
+
+    # ── Résumé global ──
+    critical = counts.get("critical", 0)
+    high     = counts.get("high",     0)
+    medium   = counts.get("medium",   0)
+    low      = counts.get("low",      0)
+
+    if critical > 0:
+        risk += min(critical * 40, 50)
+        _add(recs, "Critique",
+             f"Nuclei a détecté {critical} vulnérabilité(s) CRITIQUE(S) nécessitant "
+             f"une correction immédiate. "
+             f"Bilan complet : {high} haute(s), {medium} moyenne(s), {low} faible(s).")
+    elif high > 0:
+        risk += min(high * 20, 40)
+        _add(recs, "Important",
+             f"Nuclei a détecté {high} vulnérabilité(s) haute(s) "
+             f"et {medium} moyenne(s) sur ce site.")
+    elif medium > 0:
+        risk += min(medium * 10, 25)
+        _add(recs, "Modéré",
+             f"Nuclei a détecté {medium} vulnérabilité(s) de sévérité moyenne "
+             f"et {low} faible(s).")
+    elif low > 0:
+        risk += min(low * 3, 10)
+        _add(recs, "Conseil",
+             f"Nuclei a détecté {low} point(s) d'amélioration mineurs.")
+
+    # ── Détail par sévérité (critical / high / medium / low) ──
+    for sev_key in ("critical", "high", "medium", "low"):
+        severity_label, _ = _NUCLEI_SEVERITY_MAP[sev_key]
+        sev_findings = [f for f in findings if f.get("severity") == sev_key]
+
+        seen_names = set()
+        for finding in sev_findings:
+            name        = finding.get("name_fr") or finding.get("name", "Vulnérabilité inconnue")
+            description = finding.get("description", "")
+            matched_at  = finding.get("matched_at",  "")
+            cve_ids     = finding.get("cve_id",      [])
+            cvss        = finding.get("cvss_score")
+
+            if name in seen_names:
+                continue
+            seen_names.add(name)
+
+            parts = [f"« {name} »"]
+
+            if cve_ids:
+                parts.append(f"CVE : {', '.join(cve_ids)}")
+            if cvss:
+                parts.append(f"Score CVSS : {cvss}")
+            if matched_at and matched_at != finding.get("url", ""):
+                parts.append(f"Localisation : {matched_at}")
+
+            desc_short = (description[:200] + "…") if len(description) > 200 else description
+            action     = desc_short or "Consultez la documentation du modèle Nuclei pour corriger ce problème."
+            parts.append(f"➜ {action}")
+
+            _add(recs, severity_label, " | ".join(parts))
+
+    # ── Findings "info" : afficher tous individuellement ──
+    info_findings = [f for f in findings if f.get("severity") == "info"]
+    if info_findings:
+        seen_names = set()
+        for finding in info_findings:
+            name_fr  = finding.get("name_fr") or finding.get("name", "Information")
+            desc_fr  = finding.get("description", "")  # déjà en français
+            matched_at  = finding.get("matched_at",  "")
+            template_id = finding.get("template_id", "")
+
+            if name_fr in seen_names:
+                continue
+            seen_names.add(name_fr)
+
+            parts = [f"« {name_fr} »"]
+
+            if matched_at:
+                parts.append(f"Localisation : {matched_at}")
+
+            desc_short = (desc_fr[:200] + "…") if len(desc_fr) > 200 else desc_fr
+            detail     = desc_short or (f"Modèle : {template_id}" if template_id else "Aucun détail disponible.")
+            parts.append(f"➜ {detail}")
+
+            _add(recs, "Info", " | ".join(parts))
 
     return risk
 
@@ -888,20 +1160,22 @@ def _build_recommendations(report: dict) -> tuple[dict, int]:
         "ssl":           [],
         "virustotal":    [],
         "safe_browsing": [],
-        #"openphish":     [],
         "urlscan":       [],
         "shodan":        [],
         "wappalyzer":    [],
+        "zap":           [],
+        "nuclei":        [],
     }
 
     risk_score += _build_headers_recs      (report.get("headers",       {}), recommendations["headers"])
     risk_score += _build_ssl_recs          (report.get("ssl",           {}), recommendations["ssl"])
     risk_score += _build_virustotal_recs   (report.get("virustotal",    {}), recommendations["virustotal"])
     risk_score += _build_safe_browsing_recs(report.get("safe_browsing", {}), recommendations["safe_browsing"])
-    ##risk_score += _build_openphish_recs    (report.get("openphish",     {}), recommendations["openphish"])
     risk_score += _build_urlscan_recs      (report.get("urlscan",       {}), recommendations["urlscan"])
     risk_score += _build_shodan_recs       (report.get("shodan",        {}), recommendations["shodan"])
     risk_score += _build_wappalyzer_recs   (report.get("wappalyzer",   {}), recommendations["wappalyzer"])
+    risk_score += _build_zap_recs          (report.get("zap",          {}), recommendations["zap"])
+    risk_score += _build_nuclei_recs       (report.get("nuclei",       {}), recommendations["nuclei"])
 
     risk_score = min(risk_score, 100)
     return recommendations, risk_score
@@ -979,14 +1253,36 @@ def _build_summary(risk_score: int, recommendations: dict) -> str:
 # Tâche Celery
 # ─────────────────────────────────────────────────────────────────────────────
 
-@celery_app.task(bind=True)
+@celery_app.task(
+    bind=True,
+    soft_time_limit=420,  # 7 min
+    time_limit=480,       # 8 min hard kill
+    max_retries=1,
+)
 def scan_url_task(self, url: str, user_email: str):
     self.update_state(
         state="PROGRESS",
         meta={"status": "Lancement de l'analyse…", "progress": 5}
     )
 
-    report = run_full_scan(url)
+    #  protection contre les exceptions non gérées de run_full_scan
+
+    try:
+      report = run_full_scan(url)
+    except SoftTimeLimitExceeded:
+       logger.warning("[Tâche] Soft time limit atteint pour %s — scan interrompu", url)
+       self.update_state(
+         state="FAILURE",
+         meta={"status": "L'analyse a dépassé le délai maximum.", "progress": 0}
+       )
+       raise
+    except Exception as exc:
+        logger.exception("[Tâche] run_full_scan a échoué pour %s : %s", url, exc)
+        self.update_state(
+          state="FAILURE",
+          meta={"status": f"Erreur critique lors de l'analyse : {str(exc)}", "progress": 0}
+       )
+        raise
 
     self.update_state(
         state="PROGRESS",

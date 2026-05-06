@@ -87,6 +87,8 @@ jobs:
       GOOGLE_SAFE_BROWSING_KEY: ${{ secrets.GOOGLE_SAFE_BROWSING_KEY }}
       URLSCAN_API_KEY:          ${{ secrets.URLSCAN_API_KEY }}
       REDIS_URL: redis://localhost:6379/0
+      ZAP_API_KEY:              ${{ secrets.ZAP_API_KEY }}    
+      ZAP_BASE_URL:             http://localhost:8090
     steps:
       - uses: actions/checkout@v4
       - name: Install Dependencies
@@ -314,7 +316,7 @@ jobs:
           scan-ref: .
           severity: CRITICAL,HIGH
           exit-code: 1
-          ignore-unfixed: true 
+          ignore-unfixed: true
       - name: Trivy Backend Image
         uses: aquasecurity/trivy-action@master
         with:

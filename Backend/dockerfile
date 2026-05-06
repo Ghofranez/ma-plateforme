@@ -1,12 +1,27 @@
-FROM python:3.11-slim
+FROM golang:latest AS nuclei-builder
+RUN go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
 
+FROM python:3.11-slim
 WORKDIR /app
 
+COPY --from=nuclei-builder /go/bin/nuclei /usr/local/bin/nuclei
+RUN chmod +x /usr/local/bin/nuclei
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget curl ca-certificates unzip git \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --timeout=300 --retries=5 -r requirements.txt
 RUN pip install --upgrade setuptools wheel
+
+RUN useradd -m celeryuser
+
+COPY --chown=celeryuser:celeryuser nuclei-templates/ /home/celeryuser/nuclei-templates/
+
+ENV NUCLEI_TEMPLATES_PATH=/home/celeryuser/nuclei-templates
+
+USER celeryuser
 COPY . .
-
-EXPOSE 8000
-
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

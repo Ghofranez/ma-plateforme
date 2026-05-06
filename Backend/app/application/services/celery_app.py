@@ -16,4 +16,8 @@ celery_app.conf.update(
     result_expires=3600,          # résultats gardés 1h en Redis
     task_track_started=True,      # voir quand une tâche démarre
     worker_prefetch_multiplier=1, # un worker prend une tâche à la fois
+
+# ── Timeouts ──────────────────
+   task_soft_time_limit=420,   # 7 min — avertissement, la tâche peut se terminer proprement
+   task_time_limit=480,        # 8 min — kill forcé si dépassé
 )

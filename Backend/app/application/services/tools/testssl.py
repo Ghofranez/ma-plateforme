@@ -1,12 +1,8 @@
 """
-tools/testssl.py — Analyse SSL/TLS native Python (sans Docker)
+tools/testssl.py — Analyse SSL/TLS native Python 
 
 Rôle : analyse le certificat et le chiffrement d'un site directement
 via les modules ssl + socket + cryptography de Python.
-
- Fonctionne dans tous les environnements (workers Celery, conteneurs Docker, CI…)
- Aucune dépendance externe (pas de Docker, pas de binaire tiers)
- Fallback automatique quand SSL Labs échoue
 """
 
 import ssl

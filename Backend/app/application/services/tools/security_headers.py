@@ -5,10 +5,10 @@ import httpx
 def scan_headers(url: str) -> dict:
     """
     Vérifie les headers HTTP de sécurité
-    
+
     """
     try:
-        with httpx.Client(timeout=15, follow_redirects=True) as client:
+        with httpx.Client(timeout=15, follow_redirects=True, verify=False) as client:
             res = client.get(url)
             headers = res.headers
 

@@ -1,13 +1,6 @@
 # ==============================================================================
 # docker-compose.yml — Orchestration complète de l'application
 # ==============================================================================
-#
-# Commandes selon l'environnement :
-#   Local  → docker compose --env-file .env up --build
-#   Docker → docker compose --env-file .env.docker up --build
-#
-# Les variables ${...} sont lues depuis le fichier --env-file passé à la commande.
-# ==============================================================================
 
 services:
 
@@ -61,13 +54,13 @@ services:
       retries:  5
 
 
-  # ── API Backend (FastAPI / Uvicorn) ───────────────────────────────────────
+  # ── Backend (FastAPI / Uvicorn) ───────────────────────────────────────
   backend:
     build: ./Backend
     image: my-backend:latest
     restart: always
     ports:
-      - "8000:8000"
+      - "${BACKEND_PORT}:8000"
     environment:
       DATABASE_URL:             mysql+mysqlconnector://${MYSQL_USER}:${MYSQL_PASSWORD}@db:3306/${MYSQL_DATABASE}
       SECRET_KEY:               ${SECRET_KEY}
@@ -78,13 +71,20 @@ services:
       GOOGLE_SAFE_BROWSING_KEY: ${GOOGLE_SAFE_BROWSING_KEY}
       URLSCAN_API_KEY:          ${URLSCAN_API_KEY}
       OPENPHISH_ENABLED:        "true"
+      ZAP_API_KEY:              ${ZAP_API_KEY}
+      ZAP_BASE_URL:             http://zap:8090
     networks:
       - internal
+      - external
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
+      zap:
+         condition: service_healthy
+
+
 
 
   # ── Worker Celery ─────────────────────────────────────────────────────────
@@ -93,8 +93,9 @@ services:
     image: my-backend:latest
     restart: always
     command: >
+      sh -c "nuclei -update-templates -duc &&
       celery -A app.application.services.celery_app.celery_app
-      worker --loglevel=info --concurrency=2
+      worker --loglevel=info --concurrency=2"
     dns:
       - 8.8.8.8
       - 1.1.1.1
@@ -108,13 +109,18 @@ services:
       GOOGLE_SAFE_BROWSING_KEY: ${GOOGLE_SAFE_BROWSING_KEY}
       URLSCAN_API_KEY:          ${URLSCAN_API_KEY}
       OPENPHISH_ENABLED:        "true"
+      ZAP_API_KEY:              ${ZAP_API_KEY}
+      ZAP_BASE_URL:             http://zap:8090
     networks:
       - internal
+      - external
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
+      zap:
+         condition: service_healthy
 
 
 # ── Frontend (Vite + Nginx) ───────────────────────────────────────────────
@@ -124,19 +130,56 @@ services:
     image: my-frontend:latest
     restart: always
     ports:
-      - "3000:80"
+      - "${FRONTEND_PORT}:80"
     networks:
       - internal
+      - external
     depends_on:
-      - backend
+        backend:
+         condition: service_started
 
+# ── OWASP ZAP ─────────────────────────────────────────────────────────────
+  zap:
+    image: zaproxy/zap-stable
+    container_name: zap
+    command: >-
+      zap.sh -daemon
+      -host 0.0.0.0
+      -port 8090
+      -config api.key=${ZAP_API_KEY}
+      -config api.addrs.addr.name=.*
+      -config api.addrs.addr.regex=true
+      -config autoupdate.checkOnStart=false
+      -config autoupdate.installAddonUpdates=false
+      -config autoupdate.checkAddonUpdates=false
+      -config autoupdate.downloadNewRelease=false
+      -silent
+    environment:
+      - ZAP_API_KEY=${ZAP_API_KEY}
+    ports:
+      - "${ZAP_PORT}:8090"
+    networks:
+      - internal
+    restart: unless-stopped
+    tmpfs:
+      - /zap/wrk:rw
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8090/JSON/core/view/version/?apikey=${ZAP_API_KEY}"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
 
 # ── Réseau interne ────────────────────────────────────────────────────────────
 networks:
   internal:
-    driver: bridge   # Réseau bridge isolé : les services se voient entre eux par leur nom
-
+    driver: bridge  
+  external:
+    driver: bridge
+    internal: false
 
 # ── Volumes persistants ───────────────────────────────────────────────────────
 volumes:
-  db_data:   # Les données MySQL survivent aux "docker compose down"
+  db_data:
+  nuclei_templates:
+  nuclei_cache:

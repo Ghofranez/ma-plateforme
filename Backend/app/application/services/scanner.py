@@ -14,6 +14,8 @@ from app.application.services.tools.safe_browsing    import scan_safe_browsing
 from app.application.services.tools.urlscan          import scan_urlscan
 from app.application.services.tools.shodan           import scan_shodan_internetdb
 from app.application.services.tools.wappalyzer       import scan_wappalyzer
+from app.application.services.tools.zap_scanner import run_zap_scan
+from app.application.services.tools.nuclei_scanner import scan_nuclei
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -23,7 +25,6 @@ from app.application.services.tools.wappalyzer       import scan_wappalyzer
 def _resolve_ip(url: str) -> str | None:
     """
     Résout l'adresse IP de l'hôte contenu dans l'URL.
-    Retourne None si la résolution DNS échoue ou si l'URL est malformée.
     """
     try:
         from urllib.parse import urlparse
@@ -36,8 +37,6 @@ def _resolve_ip(url: str) -> str | None:
 def _safe_run(fn, *args):
     """
     Encapsule un appel de scanner pour garantir qu'aucune exception
-    ne remonte et n'interrompt le pipeline global.
-    En cas d'erreur, retourne un dict uniforme avec status='failed'.
     """
     try:
         return fn(*args)
@@ -56,9 +55,7 @@ _NO_FALLBACK_ERROR_TYPES = {"rate_limit", "timeout", "network"}
 def _scan_ssl_with_fallback(url: str) -> dict:
     """
     Tente d'abord une analyse SSL via SSL Labs.
-    Si elle échoue pour une raison récupérable (erreur serveur, indisponibilité),
-    bascule automatiquement vers testssl.sh / Python natif.
-    Les erreurs non récupérables (rate limit, timeout, réseau) ne déclenchent pas de fallback.
+    en cas d'erruer bascule automatiquement vers testssl.sh / Python natif.
     """
     result = _safe_run(scan_ssl, url)
 
@@ -85,45 +82,61 @@ def _scan_ssl_with_fallback(url: str) -> dict:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def run_full_scan(url: str) -> dict:
-    """
-    Lance l'ensemble des scanners de sécurité en parallèle et retourne
-    un rapport consolidé. Chaque outil est isolé : une erreur individuelle
-    n'empêche pas les autres de terminer.
-
-    """
     ip = _resolve_ip(url)
-
     report: dict = {"url": url, "status": "completed"}
 
-    # Chaque entrée : (clé dans le rapport, fonction scanner, *arguments)
     tasks = [
         ("headers",       scan_headers,          url),
         ("virustotal",    scan_virustotal,        url),
         ("safe_browsing", scan_safe_browsing,     url),
-        #("openphish",     scan_openphish,         url),
         ("urlscan",       scan_urlscan,           url),
         ("shodan",        scan_shodan_internetdb, ip),
         ("wappalyzer",    scan_wappalyzer,        url),
+        ("zap",           run_zap_scan,           url),
+        ("nuclei",        scan_nuclei,            url),
     ]
 
-    #  worker pour le scan SSL qui tourne séparément (gestion du fallback)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(tasks) + 1) as executor:
 
-        # SSL lancé en premier avec sa propre logique de fallback
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=len(tasks) + 1)
+    try:
         ssl_future = executor.submit(_scan_ssl_with_fallback, url)
 
-        # Tous les autres outils soumis via _safe_run
         future_to_key: dict = {
             executor.submit(_safe_run, fn, *args): key
             for key, fn, *args in tasks
         }
         future_to_key[ssl_future] = "ssl"
 
-        for future in concurrent.futures.as_completed(future_to_key):
-            key = future_to_key[future]
-            try:
-                report[key] = future.result()
-            except Exception as exc:
-                report[key] = {"status": "failed", "error": str(exc)}
+        completed_futures = set()
+        try:
+            for future in concurrent.futures.as_completed(
+                future_to_key, timeout=360
+            ):
+                key = future_to_key[future]
+                completed_futures.add(future)
+                try:
+                    report[key] = future.result()
+                except Exception as exc:
+                    report[key] = {"status": "failed", "error": str(exc)}
+
+        except concurrent.futures.TimeoutError:
+            for future, key in future_to_key.items():
+                if future not in completed_futures:
+                    if future.done():
+                        try:
+                            report[key] = future.result()
+                        except Exception as exc:
+                            report[key] = {"status": "failed", "error": str(exc)}
+                    else:
+                        report[key] = {
+                            "status":     "failed",
+                            "error_type": "timeout",
+                            "error":      f"Scanner '{key}' a dépassé le délai de 360s",
+                        }
+                        future.cancel()
+
+    finally:
+    
+        executor.shutdown(wait=False, cancel_futures=True)
 
     return report

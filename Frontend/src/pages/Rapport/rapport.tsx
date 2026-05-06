@@ -16,11 +16,14 @@ const TOOL_PALETTE = {
   ssl:          { iconBg: "#ECFDF5", iconColor: "#10B981", accent: "#10B981", headerBg: "#F0FDF8", border: "#A7F3D0", glow: "rgba(16,185,129,0.10)" },
   virustotal:   { iconBg: "#FFF7ED", iconColor: "#F97316", accent: "#F97316", headerBg: "#FFFBF5", border: "#FED7AA", glow: "rgba(249,115,22,0.10)" },
   safebrowsing: { iconBg: "#FDF2F8", iconColor: "#EC4899", accent: "#EC4899", headerBg: "#FEF6FB", border: "#FBCFE8", glow: "rgba(236,72,153,0.10)" },
-  //openphish:    { iconBg: "#FFF1F2", iconColor: "#F43F5E", accent: "#F43F5E", headerBg: "#FFF5F6", border: "#FECDD3", glow: "rgba(244,63,94,0.10)" },
   urlscan:      { iconBg: "#F0F9FF", iconColor: "#0EA5E9", accent: "#0EA5E9", headerBg: "#F5FBFF", border: "#BAE6FD", glow: "rgba(14,165,233,0.10)" },
   shodan:       { iconBg: "#F5F3FF", iconColor: "#8B5CF6", accent: "#8B5CF6", headerBg: "#FAF8FF", border: "#DDD6FE", glow: "rgba(139,92,246,0.10)" },
   wappalyzer:   { iconBg: "#FFF8F0", iconColor: "#EA580C", accent: "#EA580C", headerBg: "#FFFAF5", border: "#FED7AA", glow: "rgba(234,88,12,0.10)" },
+  zap:          { iconBg: "#FFF1F2", iconColor: "#E11D48", accent: "#E11D48", headerBg: "#FFF5F6", border: "#FECDD3", glow: "rgba(225,29,72,0.10)" },
+  nuclei: {
+    iconBg: "#FFF0F0", iconColor: "#DC2626", accent: "#DC2626", headerBg: "#FFF5F5", border: "#FECACA", glow: "rgba(220,38,38,0.10)"},
 };
+
 
 type Palette = typeof TOOL_PALETTE["headers"];
 
@@ -206,19 +209,42 @@ function RecsAccordion({ recs, accent, toolName }: { recs: string[]; accent: str
         {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
       </button>
       {open && (
-        <div className="px-5 pb-4 pt-3 flex flex-col gap-2 bg-white">
-          {items.map((rec, i) => {
-            const lvl = getLevel(rec) as string;
-            return (
-              <div key={i} className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-sm ${severityBg(lvl)}`}>
-                <span className={`mt-1.5 h-2 w-2 rounded-full shrink-0 ${severityDot(lvl)}`} />
-                <span className="font-semibold mr-1 shrink-0">{getLabel(rec)}</span>
-                <span className="leading-snug">{getText(rec)}</span>
-              </div>
-            );
-          })}
+  <div className="px-5 pb-4 pt-3 flex flex-col gap-2 bg-white">
+    {items.map((rec, i) => {
+      const lvl  = getLevel(rec) as string;
+      const text = getText(rec);
+
+      const actionIndex = text.indexOf("Action :");
+      const explanation = actionIndex !== -1 ? text.slice(0, actionIndex).trim() : text;
+      const action      = actionIndex !== -1 ? text.slice(actionIndex).trim()    : null;
+
+      return (
+        <div key={i} className={`rounded-lg border px-3 py-2.5 text-sm ${severityBg(lvl)}`}>
+          {/* Titre + badge */}
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className={`h-2 w-2 rounded-full shrink-0 ${severityDot(lvl)}`} />
+            <span className="font-bold">{getLabel(rec)}</span>
+          </div>
+
+          {/* Explication */}
+          <p className="text-sm leading-snug pl-4 text-gray-700">
+            {explanation}
+          </p>
+
+          {/* Action */}
+          {action && (
+            <div className="mt-2 pl-4 flex items-start gap-1.5 border-t border-current border-opacity-10 pt-2">
+              <span className="text-xs font-black shrink-0 mt-0.5 opacity-60">→</span>
+              <p className="text-xs font-semibold leading-snug">
+                {action}
+              </p>
+            </div>
+          )}
         </div>
-      )}
+      );
+    })}
+  </div>
+)}
     </div>
   );
 }
@@ -474,10 +500,10 @@ export default function Rapport() {
   const ssl = rapport.full_report?.ssl           ?? {};
   const vt  = rapport.full_report?.virustotal    ?? {};
   const sb  = rapport.full_report?.safe_browsing ?? {};
-  //const op  = rapport.full_report?.openphish     ?? {};
   const us  = rapport.full_report?.urlscan       ?? {};
   const sh  = rapport.full_report?.shodan        ?? {};
   const wa  = rapport.full_report?.wappalyzer    ?? {};
+  const zap = rapport.full_report?.zap ?? {};
 
   /* ── Résumé display généré par task.py ── */
   const displaySummary   = rapport.full_report?.display?.summary   ?? null;
@@ -490,12 +516,16 @@ export default function Rapport() {
   const recsSsl     = recsRaw ? filterRecs(parseRecs(recsRaw.ssl))           : [];
   const recsVt      = recsRaw ? filterRecs(parseRecs(recsRaw.virustotal))    : [];
   const recsSb      = recsRaw ? filterRecs(parseRecs(recsRaw.safe_browsing)) : [];
-  //const recsOp      = recsRaw ? filterRecs(parseRecs(recsRaw.openphish))     : [];
   const recsUs      = recsRaw ? filterRecs(parseRecs(recsRaw.urlscan))       : [];
   const recsSh      = recsRaw ? filterRecs(parseRecs(recsRaw.shodan))        : [];
   const recsWa      = recsRaw ? filterRecs(parseRecs(recsRaw.wappalyzer))    : [];
+  const recsZap     = recsRaw ? filterRecs(parseRecs(recsRaw.zap)) : [];
+  const nu = rapport.full_report?.nuclei ?? {};
+  const recsNu = recsRaw ? filterRecs(parseRecs(recsRaw.nuclei)) : [];
+  const scoreNu = computeToolScore(recsNu);
 
-  const allRecs = [...recsHeaders, ...recsSsl, ...recsVt, ...recsSb, ...recsUs, ...recsSh, ...recsWa];
+  const allRecs = [...recsHeaders, ...recsSsl, ...recsVt, ...recsSb,
+                 ...recsUs, ...recsSh, ...recsWa, ...recsZap, ...recsNu];
 
   const critCount = allRecs.filter(r => getLevel(r) === "critique").length;
   const highCount = allRecs.filter(r => getLevel(r) === "important").length;
@@ -505,10 +535,10 @@ export default function Rapport() {
   const scoreSsl     = computeToolScore(recsSsl);
   const scoreVt      = computeToolScore(recsVt);
   const scoreSb      = computeToolScore(recsSb);
-  //const scoreOp      = computeToolScore(recsOp);
   const scoreUs      = computeToolScore(recsUs);
   const scoreSh      = computeToolScore(recsSh);
   const scoreWa      = computeToolScore(recsWa);
+  const scoreZap = computeToolScore(recsZap);
 
   const totalProbs = (() => {
     let count = 0;
@@ -521,6 +551,8 @@ export default function Rapport() {
     if (sh.known && sh.cves?.length) count += sh.cves.length;
     if (sh.known && sh.riskyPorts?.length) count += sh.riskyPorts.length;
     if (wa.status === "completed") count += (wa.risk_technologies?.length ?? 0);
+    if (zap.status === "completed") count += (zap.alerts?.counts?.high ?? 0) + (zap.alerts?.counts?.medium ?? 0);
+    if (nu.status === "completed") count += (nu.counts?.critical ?? 0) + (nu.counts?.high ?? 0) + (nu.counts?.medium ?? 0);
     return count;
   })();
 
@@ -1128,6 +1160,320 @@ export default function Rapport() {
         </div>
       </ToolCard>
 
+     {/* ══ 8. OWASP ZAP ══ */}
+{(() => {
+  const zapAlerts = zap.alerts ?? {};
+  const zapCounts = zapAlerts.counts ?? {};
+  const zapTotal  = zapAlerts.total  ?? 0;
+  const zapHigh   = zapCounts.high   ?? 0;
+  const zapMedium = zapCounts.medium ?? 0;
+  const zapLow    = zapCounts.low    ?? 0;
+  const zapInfo   = zapCounts.info   ?? 0;
+
+  const zapBadge =
+    zap.status !== "completed" ? undefined
+    : zapHigh   > 0 ? `${zapHigh} critique(s)`
+    : zapMedium > 0 ? `${zapMedium} important(s)`
+    : zapLow    > 0 ? `${zapLow} mineur(s)`
+    : "Aucune vulnérabilité";
+
+  const zapBadgeVariant: "danger" | "warning" | "success" | "neutral" =
+    zapHigh   > 0 ? "danger"
+    : zapMedium > 0 ? "warning"
+    : zapLow    > 0 ? "warning"
+    : "success";
+
+  return (
+    <ToolCard palette={TOOL_PALETTE.zap} recs={recsZap} toolName="OWASP ZAP">
+      <ToolHeader
+        palette={TOOL_PALETTE.zap}
+        icon={<ShieldX size={18} />}
+        name="OWASP ZAP"
+        badge={zapBadge}
+        badgeVariant={zapBadgeVariant}
+        toolScore={scoreZap}
+      />
+      <div className="px-5 py-4">
+
+        {/* Erreur */}
+        {zap.status === "failed" && (
+          <p className="flex items-center gap-2 text-sm text-orange-600 bg-orange-50 rounded-lg px-3 py-2">
+            <AlertTriangle size={14} />
+            {zap.error_type === "connection_error"
+              ? "OWASP ZAP non accessible — vérifiez que le conteneur est démarré."
+              : zap.error_type === "timeout"
+                ? "L'analyse ZAP a dépassé le délai imparti."
+                : zap.error ?? "Analyse OWASP ZAP échouée"}
+          </p>
+        )}
+
+        {/* Indisponible */}
+        {zap.status !== "completed" && zap.status !== "failed" && (
+          <p className="flex items-center gap-2 text-sm text-gray-400 bg-gray-50 rounded-lg px-3 py-2">
+            <AlertTriangle size={14} /> Données OWASP ZAP non disponibles
+          </p>
+        )}
+
+        {/* Résultats */}
+        {zap.status === "completed" && (
+          <div className="space-y-3">
+
+            {/* Crawl partiel */}
+            {!zap.spider_completed && (
+              <p className="flex items-center gap-2 text-xs text-orange-600 bg-orange-50 rounded-lg px-3 py-2">
+                <AlertTriangle size={12} /> Crawl interrompu — certaines pages n'ont pas été analysées
+              </p>
+            )}
+
+            {/* Compteurs */}
+            <div className="grid grid-cols-4 gap-2">
+              {[
+                { label: "Critique",  value: zapHigh,   bg: "bg-red-50",    text: "text-red-600",    border: "border-red-100"    },
+                { label: "Important", value: zapMedium, bg: "bg-orange-50", text: "text-orange-500", border: "border-orange-100" },
+                { label: "Mineur",    value: zapLow,    bg: "bg-yellow-50", text: "text-yellow-600", border: "border-yellow-100" },
+                { label: "Info",      value: zapInfo,   bg: "bg-blue-50",   text: "text-blue-500",   border: "border-blue-100"   },
+              ].map(s => (
+                <div key={s.label} className={`rounded-xl ${s.bg} border ${s.border} p-3 flex flex-col items-center gap-1`}>
+                  <span className={`text-xl font-black ${s.text}`}>{s.value}</span>
+                  <span className="text-[10px] text-gray-500 font-medium text-center">{s.label}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Aucune vulnérabilité */}
+            {zapTotal === 0 && (
+              <div className="bg-green-50 rounded-xl p-4">
+                <p className="text-sm font-bold text-green-700">
+                  ✓ Aucune vulnérabilité web détectée par OWASP ZAP
+                </p>
+              </div>
+            )}
+
+          </div>
+        )}
+      </div>
+    </ToolCard>
+  );
+
+})()}
+{/* ══ 9. Nuclei ══ */}
+{(() => {
+  const nuCounts   = nu.counts   ?? {};
+  const nuFindings = nu.findings ?? [];
+  const nuTotal    = nu.total    ?? 0;
+  const nuCrit     = nuCounts.critical ?? 0;
+  const nuHigh     = nuCounts.high     ?? 0;
+  const nuMedium   = nuCounts.medium   ?? 0;
+  const nuLow      = nuCounts.low      ?? 0;
+  const nuInfo     = nuCounts.info     ?? 0;
+
+  const nuBadge =
+    nu.status !== "completed"  ? undefined
+    : nuCrit   > 0 ? `${nuCrit} critique(s)`
+    : nuHigh   > 0 ? `${nuHigh} élevé(s)`
+    : nuMedium > 0 ? `${nuMedium} modéré(s)`
+    : nuLow    > 0 ? `${nuLow} faible(s)`
+    : "Aucune vulnérabilité";
+
+  const nuBadgeVariant: "danger" | "warning" | "success" | "neutral" =
+    nuCrit   > 0 ? "danger"
+    : nuHigh   > 0 ? "danger"
+    : nuMedium > 0 ? "warning"
+    : "success";
+
+  // Grouper les findings par sévérité pour l'affichage
+  const bySeverity = {
+    critical: nuFindings.filter((f: any) => f.severity === "critical"),
+    high:     nuFindings.filter((f: any) => f.severity === "high"),
+    medium:   nuFindings.filter((f: any) => f.severity === "medium"),
+    low:      nuFindings.filter((f: any) => f.severity === "low"),
+    info:     nuFindings.filter((f: any) => f.severity === "info"),
+  };
+
+  const severityConfig = [
+    { key: "critical", label: "Critique",  bg: "bg-red-50",    text: "text-red-600",    border: "border-red-200",    dot: "bg-red-500"    },
+    { key: "high",     label: "Élevé",     bg: "bg-orange-50", text: "text-orange-600", border: "border-orange-200", dot: "bg-orange-500" },
+    { key: "medium",   label: "Modéré",    bg: "bg-yellow-50", text: "text-yellow-700", border: "border-yellow-200", dot: "bg-yellow-500" },
+    { key: "low",      label: "Faible",    bg: "bg-blue-50",   text: "text-blue-600",   border: "border-blue-200",   dot: "bg-blue-400"   },
+  ] as const;
+
+  return (
+    <ToolCard palette={TOOL_PALETTE.nuclei} recs={recsNu} toolName="Nuclei">
+      <ToolHeader
+        palette={TOOL_PALETTE.nuclei}
+        icon={<FileWarning size={18} />}
+        name="Nuclei — Vulnérabilités ciblées"
+        badge={nuBadge}
+        badgeVariant={nuBadgeVariant}
+        toolScore={scoreNu}
+      />
+      <div className="px-5 py-4">
+
+        {/* Erreur */}
+        {nu.status === "failed" && (
+          <p className="flex items-center gap-2 text-sm text-orange-600 bg-orange-50 rounded-lg px-3 py-2">
+            <AlertTriangle size={14} />
+            {nu.error_type === "not_installed"
+              ? "Nuclei n'est pas installé dans le conteneur."
+              : nu.error_type === "timeout"
+                ? "L'analyse Nuclei a dépassé le délai imparti."
+                : nu.error ?? "Analyse Nuclei échouée"}
+          </p>
+        )}
+
+        {/* Non disponible */}
+        {nu.status !== "completed" && nu.status !== "failed" && (
+          <p className="flex items-center gap-2 text-sm text-gray-400 bg-gray-50 rounded-lg px-3 py-2">
+            <AlertTriangle size={14} /> Données Nuclei non disponibles
+          </p>
+        )}
+
+        {/* Résultats */}
+        {nu.status === "completed" && (
+          <div className="space-y-4">
+
+            {/* Compteurs */}
+            <div className="grid grid-cols-5 gap-2">
+              {[
+                { label: "Critique", value: nuCrit,   bg: "bg-red-50",    text: "text-red-600",    border: "border-red-100"    },
+                { label: "Élevé",    value: nuHigh,   bg: "bg-orange-50", text: "text-orange-500", border: "border-orange-100" },
+                { label: "Modéré",   value: nuMedium, bg: "bg-yellow-50", text: "text-yellow-600", border: "border-yellow-100" },
+                { label: "Faible",   value: nuLow,    bg: "bg-blue-50",   text: "text-blue-500",   border: "border-blue-100"   },
+                { label: "Info",     value: nuInfo,   bg: "bg-gray-50",   text: "text-gray-500",   border: "border-gray-100"   },
+              ].map(s => (
+                <div key={s.label} className={`rounded-xl ${s.bg} border ${s.border} p-2 flex flex-col items-center gap-0.5`}>
+                  <span className={`text-lg font-black ${s.text}`}>{s.value}</span>
+                  <span className="text-[9px] text-gray-400 font-medium text-center">{s.label}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Aucune vulnérabilité */}
+            {nuTotal === 0 && (
+              <div className="bg-green-50 rounded-xl p-4">
+                <p className="text-sm font-bold text-green-700">
+                  ✓ Nuclei n'a détecté aucune vulnérabilité connue sur ce site
+                </p>
+              </div>
+            )}
+
+            {/* Findings par sévérité */}
+            {severityConfig.map(({ key, label, bg, text, border, dot }) => {
+              const findings = bySeverity[key];
+              if (findings.length === 0) return null;
+              return (
+                <div key={key}>
+                  <p className={`text-xs font-bold mb-2 flex items-center gap-1.5 ${text}`}>
+                    <span className={`h-2 w-2 rounded-full ${dot}`} />
+                    {label} ({findings.length})
+                  </p>
+                  <div className="flex flex-col gap-2">
+                    {findings.slice(0, 5).map((f: any, i: number) => (
+                      <div key={i} className={`rounded-xl border ${bg} ${border} px-3 py-2.5`}>
+
+                        {/* Nom + CVE */}
+                        <div className="flex items-start justify-between gap-2 mb-1">
+                          <span className={`text-sm font-bold ${text} leading-snug`}>
+                            {f.name_fr || f.name || f.template_id}
+                          </span>
+                          {f.cvss_score && (
+                            <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border shrink-0 ${bg} ${text} ${border}`}>
+                              CVSS {f.cvss_score}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* CVE IDs */}
+                        {f.cve_id?.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mb-1.5">
+                            {f.cve_id.map((cve: string) => (
+                              <a key={cve}
+                                href={`https://cve.mitre.org/cgi-bin/cvename.cgi?name=${cve}`}
+                                target="_blank" rel="noreferrer"
+                                className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-white border border-current opacity-80 hover:opacity-100 transition-opacity">
+                                {cve}
+                              </a>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Description */}
+                        {f.description && (
+                          <p className="text-xs text-gray-600 leading-snug mb-1.5">
+                            {f.description.length > 180
+                              ? f.description.slice(0, 180) + "…"
+                              : f.description}
+                          </p>
+                        )}
+
+                        {/* URL où trouvé */}
+                        {f.matched_at && (
+                          <p className="text-[10px] text-gray-400 font-mono truncate">
+                            → {f.matched_at}
+                          </p>
+                        )}
+
+                        {/* Tags */}
+                        {f.tags?.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1.5">
+                            {f.tags.slice(0, 4).map((tag: string, ti: number) => (
+                              <span key={ti} className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-white border border-gray-200 text-gray-500">
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    {findings.length > 5 && (
+                      <p className="text-xs text-gray-400 text-center py-1">
+                        + {findings.length - 5} autre(s) finding(s) {label.toLowerCase()}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Info findings — résumé seulement */}
+            {bySeverity.info.length > 0 && (
+              <div className="bg-gray-50 rounded-xl px-3 py-2.5 border border-gray-100">
+                <p className="text-xs text-gray-500 font-semibold">
+                  ℹ {bySeverity.info.length} information(s) collectée(s) par Nuclei
+                </p>
+                <p className="text-[10px] text-gray-400 mt-0.5">
+                  {bySeverity.info.slice(0, 3).map((f: any) => f.name).join(", ")}
+                  {bySeverity.info.length > 3 ? `… +${bySeverity.info.length - 3}` : ""}
+                </p>
+              </div>
+            )}{bySeverity.info.length > 0 && (
+  <div className="bg-gray-50 rounded-xl px-3 py-2.5 border border-gray-100">
+    <p className="text-xs text-gray-600 font-semibold mb-1">
+      ℹ {bySeverity.info.length} information(s) collectée(s)
+    </p>
+    <div className="flex flex-wrap gap-1 mt-1">
+     {[...new Set(bySeverity.info.map((f: any) => f.name_fr || f.name))].slice(0, 5).map((name: any, i: number) => (
+        <span key={i} className="text-[10px] bg-blue-50 text-blue-600 border border-blue-100 px-2 py-0.5 rounded-md font-medium">
+          {name}
+        </span>
+      ))}
+      {bySeverity.info.length > 5 && (
+        <span className="text-[10px] text-gray-400">
+          +{bySeverity.info.length - 5} autres
+        </span>
+      )}
+    </div>
+    <p className="text-[10px] text-gray-400 mt-1.5 leading-snug">
+      Ces informations décrivent la configuration du serveur — elles ne représentent pas des vulnérabilités directes.
+    </p>
+        </div>
+        )}
+          </div>
+        )}
+      </div>
+    </ToolCard>
+  );
+})()}
     </div>
   );
 }

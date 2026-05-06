@@ -47,9 +47,9 @@ Frontend/
 │   │   ├── Accueilpage/            # Page principale analyse URL
 │   │   ├── Historique/             # Historique des analyses
 │   │   ├── Profil/                 # Profil utilisateur
-│   │   └── Sidebar/                # Navigation latérale
 │   ├── components/
 │   │   └── ui/                     # Composants réutilisables
+│   │   └── Sidebar/                # Navigation latérale
 │   └── tests/
 │       └── basic.test.ts           # Tests unitaires
 ├── public/                         # Assets statiques
@@ -113,20 +113,6 @@ npm run dev
 
  Application React (dev): `http://localhost:5173`
 
- Docker
-
-
-- Lancer avec Docker Compose (dev local)
-
-cd ..
-
-docker compose up --build -d
-
-- Services disponibles:
-
- Frontend  → http://localhost:3000
- Backend   → http://localhost:8000
- phpMyAdmin → http://localhost:8080
 
 ### Tests
 

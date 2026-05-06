@@ -32,7 +32,7 @@ def scan_ssl(url: str) -> dict:
         requests.get(
             SSL_LABS_API,
             params={"host": host, "startNew": "on", "all": "done"},
-            timeout=15,
+            timeout=120,
         )
 
         start_time = time.time()
@@ -41,7 +41,7 @@ def scan_ssl(url: str) -> dict:
             r = requests.get(
                 SSL_LABS_API,
                 params={"host": host, "all": "done"},
-                timeout=15,
+                timeout=120,
             )
 
             if r.status_code == 429:

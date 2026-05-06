@@ -100,9 +100,11 @@ devsecops-react/
 
 ├── sonar-project.properties    # Configuration SonarCloud
 
-├── docker-compose.yml
+├── docker-compose.yml   # pour test local
 
-├── .env.example
+├── docker-compose.prod.yml # pour push de projet
+
+├── .env.docker.example  # simulaire a .env.docker
 
 └── README.md
 
@@ -117,12 +119,12 @@ Avant de lancer le projet en local, les outils suivants doivent etre installes s
 1- Cloner le dépot:
 - git clone https://github.com/Ghofranez/pipeline-test.git
 - cd pipeline-test
-2- Créer le fichier .env
-- Copier le contenu de .env.example puis ajuster.
+2- Créer le fichier .env.docker
+- Copier le contenu de .env.docker.example puis ajuster.
 
 3- Lancer Docker Compose:
 
-docker compose up --build
+docker compose --env-file .env.docker up --build
 
 4- Accès à l'application
 

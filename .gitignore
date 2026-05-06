@@ -16,6 +16,7 @@ build/
 .pytest_cache/
 coverage.xml
 htmlcov/
+nuclei-templates/
 
 # ── NODE (Frontend) ──────────────────────────────────
 # globale tous les node_modules dans tous les dossiers
