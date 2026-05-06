@@ -401,7 +401,7 @@ Le runner self-hosted permet à GitHub Actions de lancer le déploiement directe
 Nginx comme reverse proxy : il reçoit les requêtes et les redirige vers le bon service (React sur le port 3000 ou FastAPI sur le port 8000).
 
 > Avec la redirection du port :
-> Fronend: http://127.0.0.1:8080
+> Fronend: http://127.0.0.1:3000
 > Backend: http://127.0.0.1:8000
 
 5- Installer Falco : un outil qui surveille le comportement des containers en temps réel (accès fichiers suspects, commandes inhabituelles, etc.).

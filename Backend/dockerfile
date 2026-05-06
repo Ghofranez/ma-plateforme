@@ -18,7 +18,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --timeout=300 --retries=5 -r requirements.txt
 RUN pip install --upgrade setuptools wheel
 
-RUN adduser -D celeryuser
+
 
 ENV NUCLEI_TEMPLATES_PATH=/home/celeryuser/nuclei-templates
 
