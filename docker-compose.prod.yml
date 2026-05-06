@@ -82,8 +82,11 @@ services:
     image: ${BACKEND_IMAGE}
     restart: always
     command: >
+      sh -c "nuclei -update-templates -duc &&
       celery -A app.application.services.celery_app.celery_app
-      worker --loglevel=info --concurrency=2
+      worker --loglevel=info --concurrency=2"
+    volumes:
+    - nuclei_templates:/home/celeryuser/nuclei-templates
     dns:
       - 8.8.8.8
       - 1.1.1.1
@@ -160,3 +163,4 @@ networks:
 # ── Volumes persistants ───────────────────────────────────────────────────
 volumes:
   db_data:
+  nuclei_templates:

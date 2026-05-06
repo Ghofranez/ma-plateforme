@@ -18,7 +18,7 @@ RUN pip install --upgrade setuptools wheel
 
 RUN useradd -m celeryuser
 
-COPY --chown=celeryuser:celeryuser nuclei-templates/ /home/celeryuser/nuclei-templates/
+#COPY --chown=celeryuser:celeryuser nuclei-templates/ /home/celeryuser/nuclei-templates/
 
 ENV NUCLEI_TEMPLATES_PATH=/home/celeryuser/nuclei-templates
 

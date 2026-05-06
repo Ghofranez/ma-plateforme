@@ -1,7 +1,5 @@
 # ── ENV ──────────────────────────────────────────────
 .env
-.env.*
-!.env.example
 Backend/.env
 .env.docker
 # ── PYTHON (Backend) ─────────────────────────────────

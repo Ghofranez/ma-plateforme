@@ -96,6 +96,8 @@ services:
       sh -c "nuclei -update-templates -duc &&
       celery -A app.application.services.celery_app.celery_app
       worker --loglevel=info --concurrency=2"
+    volumes:
+      - nuclei_templates:/home/celeryuser/nuclei-templates
     dns:
       - 8.8.8.8
       - 1.1.1.1
@@ -173,7 +175,7 @@ services:
 # ── Réseau interne ────────────────────────────────────────────────────────────
 networks:
   internal:
-    driver: bridge  
+    driver: bridge
   external:
     driver: bridge
     internal: false
