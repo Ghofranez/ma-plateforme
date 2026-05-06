@@ -62,11 +62,10 @@ ZAP_PORT=port_de_owaspzap
 
 ** Remarque :
 
-> `SMTP_PASSWORD` n'est pas ton mot de passe Gmail normal.
+> `SMTP_PASSWORD` n'est pas ton mot de passe Gmail normal.:
+1- Il faut générer un **mot de passe d'application** depuis :
 
-> Il faut générer un **mot de passe d'application** depuis :
-
-> `Google Account → Sécurité → Mots de passe des applications`
+2- `Google Account → Sécurité → Mots de passe des applications`
 
 > Générer une SECRET_KEY: openssl rand -hex 32 (dans cmd)
 
