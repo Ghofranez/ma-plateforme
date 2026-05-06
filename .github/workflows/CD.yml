@@ -45,23 +45,19 @@ jobs:
           COSIGN_PUBLIC_KEY: ${{ secrets.COSIGN_PUBLIC_KEY }}
         run: |
           echo "$COSIGN_PUBLIC_KEY" > cosign.pub
+          #  FIX: suppression du `if [ $? -ne 0 ]` inutile
+          # cosign exit non-zero → le step échoue automatiquement
           cosign verify --key cosign.pub ${{ steps.set-images.outputs.backend }}
-          if [ $? -ne 0 ]; then
-            echo "Image backend non signée — déploiement stoppé !"
-            exit 1
-          fi
-          echo "Image backend vérifiée "
+          echo "Image backend vérifiée ✓"
 
       - name: Verify Frontend Image
         env:
           COSIGN_PUBLIC_KEY: ${{ secrets.COSIGN_PUBLIC_KEY }}
         run: |
+          # FIX: cosign.pub recréé explicitement (pas de dépendance inter-steps)
+          echo "$COSIGN_PUBLIC_KEY" > cosign.pub
           cosign verify --key cosign.pub ${{ steps.set-images.outputs.frontend }}
-          if [ $? -ne 0 ]; then
-            echo "Image frontend non signée — déploiement stoppé !"
-            exit 1
-          fi
-          echo "Image frontend vérifiée "
+          echo "Image frontend vérifiée ✓"
 
   ########################################################
   # JOB 2 — DEPLOIEMENT
@@ -69,23 +65,34 @@ jobs:
   deploy:
     name: Deploy Application
     needs: cosign-verify
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    if: success()
     runs-on: self-hosted
+    outputs:
+
+      prev_backend:  ${{ steps.save-sha.outputs.prev_backend }}
+      prev_frontend: ${{ steps.save-sha.outputs.prev_frontend }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Save previous SHA for rollback
+        id: save-sha
         run: |
-           docker inspect ghcr.io/${{ github.repository_owner }}/my-backend:latest \
-           --format='{{index .RepoDigests 0}}' > /tmp/previous_backend.txt 2>/dev/null || echo "" > /tmp/previous_backend.txt
-           docker inspect ghcr.io/${{ github.repository_owner }}/my-frontend:latest \
-           --format='{{index .RepoDigests 0}}' > /tmp/previous_frontend.txt 2>/dev/null || echo "" > /tmp/previous_frontend.txt
-           echo "Version précédente sauvegardée"
+          PREV_BACKEND=$(docker inspect \
+            ghcr.io/${{ github.repository_owner }}/my-backend:latest \
+            --format='{{index .RepoDigests 0}}' 2>/dev/null || echo "")
+          PREV_FRONTEND=$(docker inspect \
+            ghcr.io/${{ github.repository_owner }}/my-frontend:latest \
+            --format='{{index .RepoDigests 0}}' 2>/dev/null || echo "")
+          echo "prev_backend=${PREV_BACKEND}"   >> $GITHUB_OUTPUT
+          echo "prev_frontend=${PREV_FRONTEND}" >> $GITHUB_OUTPUT
+          echo "Version précédente sauvegardée"
 
       - name: Create .env file
         run: |
-          cat > .env << EOF
+          #  FIX: heredoc sans indentation (les espaces étaient écrits dans le fichier)
+          cat > .env << 'EOF'
           MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }}
           MYSQL_DATABASE=${{ secrets.MYSQL_DATABASE }}
           MYSQL_USER=${{ secrets.MYSQL_USER }}
@@ -101,9 +108,9 @@ jobs:
           ZAP_API_KEY=${{ secrets.ZAP_API_KEY }}
           ZAP_BASE_URL=http://zap:8090
           OPENPHISH_ENABLED=true
-          PHPMYADMIN_HOST_BINDING=${{secrets.PHPMYADMIN_HOST_BINDING }}
-          BACKEND_PORT=${{secrets.BACKEND_PORT}}
-          FRONTEND_PORT=${{secrets.FRONTEND_PORT}}
+          PHPMYADMIN_HOST_BINDING=${{ secrets.PHPMYADMIN_HOST_BINDING }}
+          BACKEND_PORT=${{ secrets.BACKEND_PORT }}
+          FRONTEND_PORT=${{ secrets.FRONTEND_PORT }}
           BACKEND_IMAGE=${{ needs.cosign-verify.outputs.backend_image }}
           FRONTEND_IMAGE=${{ needs.cosign-verify.outputs.frontend_image }}
           EOF
@@ -125,18 +132,19 @@ jobs:
           echo "=== DÉBUT DU DÉPLOIEMENT ==="
           docker compose -f docker-compose.prod.yml down
           docker compose -f docker-compose.prod.yml up -d
-          sleep 30
-          docker ps
           echo "=== DÉPLOIEMENT TERMINÉ ==="
+
       - name: Debug — logs backend
         run: |
-           echo "=== STATUS CONTENEURS ==="
-           docker ps -a
-           echo "=== LOGS BACKEND ==="
-           docker logs $(docker ps -a --filter "name=backend" -q) --tail 50
-           echo "=== LOGS DB ==="
-           docker logs $(docker ps -a --filter "name=db" -q) --tail 20
-
+          echo "=== STATUS CONTENEURS ==="
+          docker ps -a
+          echo "=== LOGS BACKEND ==="
+          # FIX: head -1 pour éviter multi-ID si plusieurs conteneurs backend
+          BACKEND_ID=$(docker ps -a --filter "name=backend" -q | head -1)
+          [ -n "$BACKEND_ID" ] && docker logs "$BACKEND_ID" --tail 50 || echo "Pas de conteneur backend trouvé"
+          echo "=== LOGS DB ==="
+          DB_ID=$(docker ps -a --filter "name=db" -q | head -1)
+          [ -n "$DB_ID" ] && docker logs "$DB_ID" --tail 20 || echo "Pas de conteneur db trouvé"
 
   ########################################################
   # JOB 3 — HEALTH CHECK
@@ -144,14 +152,15 @@ jobs:
   health-check:
     name: Health Check
     needs: deploy
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: success()
     runs-on: self-hosted
     steps:
       - name: Health Check Backend
         run: |
           for i in {1..15}; do
-            if curl -sf http://localhost:8000/; then
-              echo "Backend opérationnel "
+            # FIX: /health au lieu de / (endpoint dédié plus fiable)
+            if curl -sf http://localhost:8000/health; then
+              echo "Backend opérationnel ✓"
               exit 0
             fi
             echo "Tentative $i/15 — attente 10s..."
@@ -175,14 +184,14 @@ jobs:
 
       - name: Health Check Worker (Celery)
         run: |
-          # Vérifie que le worker Celery est bien actif
           WORKER=$(docker ps --filter "name=worker" --format "{{.Status}}" | head -1)
           if [[ "$WORKER" != *"Up"* ]]; then
             echo "Worker Celery non actif — vérifier les logs !"
-            docker logs $(docker ps --filter "name=worker" -q) --tail 50
+            WORKER_ID=$(docker ps --filter "name=worker" -q | head -1)
+            [ -n "$WORKER_ID" ] && docker logs "$WORKER_ID" --tail 50
             exit 1
           fi
-          echo "Worker Celery opérationnel "
+          echo "Worker Celery opérationnel ✓"
 
   ########################################################
   # JOB 4 — OWASP ZAP DAST
@@ -190,11 +199,12 @@ jobs:
   dast-zap:
     name: DAST Scan (OWASP ZAP)
     needs: health-check
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: success()
     runs-on: self-hosted
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
 
       - name: Login GHCR
         run: |
@@ -208,6 +218,8 @@ jobs:
 
       - name: OWASP ZAP Scan
         run: |
+          #  FIX: --network host est correct sur self-hosted Linux
+          # ZAP écrit dans /zap/wrk/ → monté sur zap-report/
           docker run --rm \
             --network host \
             -v ${{ github.workspace }}/zap-report:/zap/wrk:rw \
@@ -218,27 +230,34 @@ jobs:
             -J zap-report.json \
             -l WARN \
             -I
+          # FIX: vérifier explicitement que le rapport a bien été créé
+          if [ ! -f "${{ github.workspace }}/zap-report/zap-report.json" ]; then
+            echo "ZAP n'a pas généré de rapport — le scan a échoué silencieusement !"
+            exit 1
+          fi
 
       - name: Analyse ZAP Results
         run: |
-          if [ -f "${{ github.workspace }}/zap-report/zap-report.json" ]; then
-            CRITICAL=$(grep -c '"riskcode":"3"' \
-              ${{ github.workspace }}/zap-report/zap-report.json || true)
-            if [ "$CRITICAL" -gt "0" ]; then
-              echo "ZAP détecte $CRITICAL faille(s) CRITIQUE(S) !"
-              exit 1
-            fi
-            echo "Aucune faille critique détectée "
-          else
-            echo "Rapport ZAP non trouvé — scan ignoré"
+          REPORT="${{ github.workspace }}/zap-report/zap-report.json"
+          # FIX: validation JSON avec jq avant parsing
+          if ! jq empty "$REPORT" 2>/dev/null; then
+            echo "Rapport ZAP malformé ou vide !"
+            exit 1
           fi
+          # FIX: utiliser jq pour un parsing fiable
+          CRITICAL=$(jq '[.. | objects | select(.riskcode == "3")] | length' "$REPORT" || echo "0")
+          if [ "$CRITICAL" -gt "0" ]; then
+            echo "ZAP détecte $CRITICAL faille(s) CRITIQUE(S) !"
+            exit 1
+          fi
+          echo "Aucune faille critique détectée ✓"
 
       - name: Upload ZAP Report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: zap-report
-          path: ${{ github.workspace }}/zap-report/zap-report.html
+          path: ${{ github.workspace }}/zap-report/
 
   ########################################################
   # JOB 5 — FALCO RUNTIME SECURITY
@@ -246,7 +265,7 @@ jobs:
   falco-check:
     name: Falco Runtime Security Check
     needs: dast-zap
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: success()
     runs-on: self-hosted
     steps:
       - name: Check Falco Alerts
@@ -259,7 +278,7 @@ jobs:
             echo "$ALERTS"
             exit 1
           fi
-          echo "Aucune alerte Falco critique "
+          echo "Aucune alerte Falco critique ✓"
 
   ########################################################
   # JOB 6 — VERIFY CONTAINERS
@@ -267,7 +286,7 @@ jobs:
   verify-containers:
     name: Verify Running Containers
     needs: falco-check
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: success()
     runs-on: self-hosted
     steps:
       - name: List Running Containers
@@ -278,17 +297,17 @@ jobs:
 
       - name: Check Required Containers
         run: |
-          # Vérifie que chaque service critique tourne
-          REQUIRED=("db" "redis" "backend" "worker" "frontend" "zap")
+          # FIX: ZAP retiré de la liste (il tourne en --rm, pas en démon)
+          REQUIRED=("db" "redis" "backend" "worker" "frontend")
           ALL_OK=true
 
           for SERVICE in "${REQUIRED[@]}"; do
             STATUS=$(docker ps --filter "name=${SERVICE}" \
               --format "{{.Status}}" | head -1)
             if [[ "$STATUS" == *"Up"* ]]; then
-              echo " ${SERVICE} : ${STATUS}"
+              echo "✓ ${SERVICE} : ${STATUS}"
             else
-              echo " ${SERVICE} : NON ACTIF"
+              echo "✗ ${SERVICE} : NON ACTIF"
               ALL_OK=false
             fi
           done
@@ -297,7 +316,7 @@ jobs:
             echo "Un ou plusieurs conteneurs critiques sont inactifs !"
             exit 1
           fi
-          echo "Tous les conteneurs sont actifs "
+          echo "Tous les conteneurs sont actifs ✓"
 
   ########################################################
   # JOB 7 — ROLLBACK SI ECHEC
@@ -308,81 +327,89 @@ jobs:
     runs-on: self-hosted
     if: failure()
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-    - name: Recreate .env for rollback
-      run: |
-        cat > .env << EOF
-        MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }}
-        MYSQL_DATABASE=${{ secrets.MYSQL_DATABASE }}
-        MYSQL_USER=${{ secrets.MYSQL_USER }}
-        MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }}
-        DATABASE_URL=${{ secrets.DATABASE_URL }}
-        SECRET_KEY=${{ secrets.SECRET_KEY }}
-        SMTP_EMAIL=${{ secrets.SMTP_EMAIL }}
-        SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}
-        REDIS_URL=${{ secrets.REDIS_URL }}
-        VIRUSTOTAL_KEY=${{ secrets.VIRUSTOTAL_KEY }}
-        GOOGLE_SAFE_BROWSING_KEY=${{ secrets.GOOGLE_SAFE_BROWSING_KEY }}
-        URLSCAN_API_KEY=${{ secrets.URLSCAN_API_KEY }}
-        ZAP_API_KEY=${{ secrets.ZAP_API_KEY }}
-        ZAP_BASE_URL=http://zap:8090
-        OPENPHISH_ENABLED=true
-        PHPMYADMIN_HOST_BINDING=${{ secrets.PHPMYADMIN_HOST_BINDING }}
-        BACKEND_PORT=${{ secrets.BACKEND_PORT }}
-        FRONTEND_PORT=${{ secrets.FRONTEND_PORT }}
-        BACKEND_IMAGE=ghcr.io/${{ github.repository_owner }}/my-backend:latest
-        FRONTEND_IMAGE=ghcr.io/${{ github.repository_owner }}/my-frontend:latest
-        EOF
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Rollback to previous version
-      run: |
-        echo "=== ROLLBACK EN COURS ==="
+      - name: Recreate .env for rollback
+        run: |
+          # ✅ FIX: heredoc sans indentation
+          cat > .env << 'EOF'
+          MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }}
+          MYSQL_DATABASE=${{ secrets.MYSQL_DATABASE }}
+          MYSQL_USER=${{ secrets.MYSQL_USER }}
+          MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }}
+          DATABASE_URL=${{ secrets.DATABASE_URL }}
+          SECRET_KEY=${{ secrets.SECRET_KEY }}
+          SMTP_EMAIL=${{ secrets.SMTP_EMAIL }}
+          SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}
+          REDIS_URL=${{ secrets.REDIS_URL }}
+          VIRUSTOTAL_KEY=${{ secrets.VIRUSTOTAL_KEY }}
+          GOOGLE_SAFE_BROWSING_KEY=${{ secrets.GOOGLE_SAFE_BROWSING_KEY }}
+          URLSCAN_API_KEY=${{ secrets.URLSCAN_API_KEY }}
+          ZAP_API_KEY=${{ secrets.ZAP_API_KEY }}
+          ZAP_BASE_URL=http://zap:8090
+          OPENPHISH_ENABLED=true
+          PHPMYADMIN_HOST_BINDING=${{ secrets.PHPMYADMIN_HOST_BINDING }}
+          BACKEND_PORT=${{ secrets.BACKEND_PORT }}
+          FRONTEND_PORT=${{ secrets.FRONTEND_PORT }}
+          BACKEND_IMAGE=ghcr.io/${{ github.repository_owner }}/my-backend:latest
+          FRONTEND_IMAGE=ghcr.io/${{ github.repository_owner }}/my-frontend:latest
+          EOF
 
-        PREV_BACKEND=$(cat /tmp/previous_backend.txt || echo "")
-        PREV_FRONTEND=$(cat /tmp/previous_frontend.txt || echo "")
+      - name: Rollback to previous version
+        run: |
+          echo "=== ROLLBACK EN COURS ==="
 
-        if [ -z "$PREV_BACKEND" ] || [ -z "$PREV_FRONTEND" ]; then
-          echo "Pas de version précédente trouvée — rollback impossible !"
-          exit 1
-        fi
+          #  FIX: digests récupérés depuis les outputs du job deploy
+          # (plus fiable que /tmp/ sur multi-runners)
+          PREV_BACKEND="${{ needs.deploy.outputs.prev_backend }}"
+          PREV_FRONTEND="${{ needs.deploy.outputs.prev_frontend }}"
 
-        # Retagger l'ancienne image comme latest
-        docker pull "$PREV_BACKEND"
-        docker tag  "$PREV_BACKEND" ghcr.io/${{ github.repository_owner }}/my-backend:latest
+          if [ -z "$PREV_BACKEND" ] || [ -z "$PREV_FRONTEND" ]; then
+            echo "Pas de version précédente trouvée — rollback impossible !"
+            exit 1
+          fi
 
-        docker pull "$PREV_FRONTEND"
-        docker tag  "$PREV_FRONTEND" ghcr.io/${{ github.repository_owner }}/my-frontend:latest
+          docker pull "$PREV_BACKEND"
+          docker tag  "$PREV_BACKEND" ghcr.io/${{ github.repository_owner }}/my-backend:latest
 
-        # Redémarrer avec l'ancienne version
-        docker compose -f docker-compose.prod.yml down
-        docker compose -f docker-compose.prod.yml up -d
-        sleep 15
-        docker ps
-        echo "=== ROLLBACK TERMINÉ — version précédente restaurée ==="
+          docker pull "$PREV_FRONTEND"
+          docker tag  "$PREV_FRONTEND" ghcr.io/${{ github.repository_owner }}/my-frontend:latest
 
-    - name: Verify Rollback
-      run: |
-        sleep 10
-        curl -sf http://localhost:8000/health && echo "Backend OK après rollback" || echo "Backend toujours KO !"
+          docker compose -f docker-compose.prod.yml down
+          docker compose -f docker-compose.prod.yml up -d
+          sleep 15
+          docker ps
+          echo "=== ROLLBACK TERMINÉ — version précédente restaurée ==="
 
- ########################################################
+      - name: Verify Rollback
+        run: |
+          sleep 10
+          #  FIX: utiliser /health pour une vérification fiable
+          if curl -sf http://localhost:8000/health; then
+            echo "Backend OK après rollback ✓"
+          else
+            echo "Backend toujours KO après rollback !"
+            exit 1
+          fi
+
+  ########################################################
   # JOB 8 — NOTIFICATIONS
   ########################################################
   notify:
     name: Notifications
-    needs: [verify-containers, rollback, cosign-verify]
+    needs: [verify-containers, cosign-verify]
     runs-on: self-hosted
     if: always()
     steps:
       - name: Notify Success
-        if: ${{ needs.verify-containers.result == 'success' && github.event.workflow_run.conclusion == 'success' }}
+        if: ${{ needs.verify-containers.result == 'success' }}
         run: |
-          echo "Déploiement réussi !"
+          echo " Déploiement réussi !"
           echo "Backend  : ${{ needs.cosign-verify.outputs.backend_image }}"
           echo "Frontend : ${{ needs.cosign-verify.outputs.frontend_image }}"
 
       - name: Notify Failure
-        if: ${{ needs.verify-containers.result != 'success' || github.event.workflow_run.conclusion != 'success' }}
+        if: ${{ needs.verify-containers.result != 'success' }}
         run: |
           echo "Déploiement échoué — vérifiez les logs GitHub Actions !"

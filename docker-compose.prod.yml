@@ -65,7 +65,7 @@ services:
       GOOGLE_SAFE_BROWSING_KEY: ${GOOGLE_SAFE_BROWSING_KEY}
       URLSCAN_API_KEY:          ${URLSCAN_API_KEY}
       OPENPHISH_ENABLED:        "true"
-      ZAP_API_KEY:              ${ZAP_API_KEY}      # ← ajouter
+      ZAP_API_KEY:              ${ZAP_API_KEY}
       ZAP_BASE_URL:             http://zap:8090
     networks:
       - internal
@@ -99,7 +99,7 @@ services:
       GOOGLE_SAFE_BROWSING_KEY: ${GOOGLE_SAFE_BROWSING_KEY}
       URLSCAN_API_KEY:          ${URLSCAN_API_KEY}
       OPENPHISH_ENABLED:        "true"
-      ZAP_API_KEY:              ${ZAP_API_KEY}      # ← ajouter
+      ZAP_API_KEY:              ${ZAP_API_KEY}
       ZAP_BASE_URL:             http://zap:8090
     networks:
       - internal
@@ -132,9 +132,15 @@ services:
       -config api.key=${ZAP_API_KEY}
       -config api.addrs.addr.name=.*
       -config api.addrs.addr.regex=true
+      -config autoupdate.checkOnStart=false
+      -config autoupdate.installAddonUpdates=false
+      -config autoupdate.checkAddonUpdates=false
+      -config autoupdate.downloadNewRelease=false
+      -silent
     environment:
       - ZAP_API_KEY=${ZAP_API_KEY}
-
+    ports:
+      - "${ZAP_PORT}:8090"
     networks:
       - internal
     restart: unless-stopped
