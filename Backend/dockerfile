@@ -1,7 +1,7 @@
 FROM golang:1.25-alpine AS nuclei-builder
 RUN go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
 
-FROM python:3.11-slim
+FROM python:3.11-alpine
 WORKDIR /app
 
 COPY --from=nuclei-builder /go/bin/nuclei /usr/local/bin/nuclei

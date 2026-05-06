@@ -1,0 +1,19 @@
+# .snyk
+version: v1.25.0
+ignore:
+  SNYK-GOLANG-GOOPENTELEMETRYIOOTELPROPAGATION-15928420:
+    - '*':
+        reason: Vulnerability in nuclei binary, updated at runtime
+        expires: 2026-12-31T00:00:00.000Z
+  SNYK-GOLANG-GOOPENTELEMETRYIOOTELINTERNALGLOBAL-15928418:
+    - '*':
+        reason: Vulnerability in nuclei binary, updated at runtime
+        expires: 2026-12-31T00:00:00.000Z
+  SNYK-DEBIAN13-GNUTLS28-16344302:
+    - '*':
+        reason: No fix available yet for Debian 13, migrating to Alpine
+        expires: 2026-12-31T00:00:00.000Z
+  SNYK-DEBIAN13-GNUTLS28-16344314:
+    - '*':
+        reason: No fix available yet for Debian 13, migrating to Alpine
+        expires: 2026-12-31T00:00:00.000Z

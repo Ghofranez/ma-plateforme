@@ -87,7 +87,7 @@ jobs:
       GOOGLE_SAFE_BROWSING_KEY: ${{ secrets.GOOGLE_SAFE_BROWSING_KEY }}
       URLSCAN_API_KEY:          ${{ secrets.URLSCAN_API_KEY }}
       REDIS_URL: redis://localhost:6379/0
-      ZAP_API_KEY:              ${{ secrets.ZAP_API_KEY }}    
+      ZAP_API_KEY:              ${{ secrets.ZAP_API_KEY }}
       ZAP_BASE_URL:             http://localhost:8090
     steps:
       - uses: actions/checkout@v4
@@ -291,8 +291,7 @@ jobs:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
           image: ${{ needs.docker-build.outputs.backend_image }}
-          args: --file=Backend/dockerfile --severity-threshold=high
-
+          args: --file=Backend/dockerfile --severity-threshold=high --policy-path=.snyk
   # ── JOB 10 — TRIVY ───────────────────────────────────────
   trivy-scan:
     name: Trivy Security Scan

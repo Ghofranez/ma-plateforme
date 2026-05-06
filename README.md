@@ -100,6 +100,8 @@ devsecops-react/
 
 ├── sonar-project.properties    # Configuration SonarCloud
 
+├── .snyk   # pour ignorer certains vulnerabiltés des CVE hors de ton contrôle.
+
 ├── docker-compose.yml   # pour test local
 
 ├── docker-compose.prod.yml # pour push de projet

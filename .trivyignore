@@ -1,3 +1,5 @@
 node_modules/
 frontend/build/
 .venv/
+CVE-2026-34040
+CVE-2026-29181
