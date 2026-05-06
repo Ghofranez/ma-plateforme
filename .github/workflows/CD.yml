@@ -366,7 +366,7 @@ jobs:
         sleep 10
         curl -sf http://localhost:8000/health && echo "Backend OK après rollback" || echo "Backend toujours KO !"
 
-  ########################################################
+ ########################################################
   # JOB 8 — NOTIFICATIONS
   ########################################################
   notify:
@@ -376,13 +376,13 @@ jobs:
     if: always()
     steps:
       - name: Notify Success
-        if: ${{ needs.verify-containers.result == 'success' }}
+        if: ${{ needs.verify-containers.result == 'success' && github.event.workflow_run.conclusion == 'success' }}
         run: |
-          echo " Déploiement réussi !"
+          echo "Déploiement réussi !"
           echo "Backend  : ${{ needs.cosign-verify.outputs.backend_image }}"
           echo "Frontend : ${{ needs.cosign-verify.outputs.frontend_image }}"
 
       - name: Notify Failure
-        if: ${{ needs.verify-containers.result != 'success' }}
+        if: ${{ needs.verify-containers.result != 'success' || github.event.workflow_run.conclusion != 'success' }}
         run: |
-          echo " Déploiement échoué — vérifiez les logs GitHub Actions !"
+          echo "Déploiement échoué — vérifiez les logs GitHub Actions !"
