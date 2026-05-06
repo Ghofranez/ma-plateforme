@@ -9,13 +9,16 @@ RUN chmod +x /usr/local/bin/nuclei
 
 RUN apk add --no-cache wget curl ca-certificates unzip git
 
+# Créer le dossier templates AVANT de changer d'utilisateur
+RUN adduser -D celeryuser && \
+    mkdir -p /home/celeryuser/nuclei-templates && \
+    chown -R celeryuser:celeryuser /home/celeryuser
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir --timeout=300 --retries=5 -r requirements.txt
 RUN pip install --upgrade setuptools wheel
 
 RUN adduser -D celeryuser
-
-#COPY --chown=celeryuser:celeryuser nuclei-templates/ /home/celeryuser/nuclei-templates/
 
 ENV NUCLEI_TEMPLATES_PATH=/home/celeryuser/nuclei-templates
 

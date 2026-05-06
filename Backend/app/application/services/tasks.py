@@ -538,30 +538,23 @@ def _build_urlscan_recs(us: dict, recs: list) -> int:
                  "le site répond lentement aux scanners automatiques.")
             _add(recs, "Info",
                  "Les autres vérifications (VirusTotal, SSL, En-têtes) restent valides.")
-
         elif error_type == "submission_blocked" or "block" in error_msg or "refused" in error_msg:
             _add(recs, "Info",
-                 "Ce site bloque les analyses automatiques (protection anti-robot active). "
-                 "Cela peut indiquer une sécurité renforcée, ou au contraire une dissimulation volontaire.")
+                 "Ce site bloque les analyses automatiques (protection anti-robot active).")
             _add(recs, "Conseil",
-                 "Pour analyser manuellement : rendez-vous sur urlscan.io, "
-                 "collez l'URL dans la barre de recherche et lancez une analyse publique.")
-
+                 "Pour analyser manuellement : rendez-vous sur urlscan.io et lancez une analyse publique.")
         else:
             _add(recs, "Info",
-                 "L'analyse comportementale est en cours ou n'a pas abouti pour cette URL. "
-                 "urlscan.io soumet parfois un nouveau scan — le résultat peut prendre 30 à 60 secondes.")
+                 "L'analyse comportementale est en cours ou n'a pas abouti pour cette URL.")
             _add(recs, "Conseil",
-                 "Relancez l'analyse dans quelques instants, ou vérifiez directement sur urlscan.io "
-                 "en recherchant le domaine dans leur moteur de recherche.")
+                 "Relancez l'analyse dans quelques instants, ou vérifiez directement sur urlscan.io.")
 
         return risk
 
     verdict = us.get("verdict")
     if not verdict:
         _add(recs, "Info",
-             "L'analyse comportementale est en attente — "
-             "urlscan.io traite encore le scan. Réessayez dans 30 secondes.")
+             "L'analyse comportementale est en attente — urlscan.io traite encore le scan.")
         return risk
 
     page = us.get("page", {})
@@ -571,8 +564,13 @@ def _build_urlscan_recs(us: dict, recs: list) -> int:
         country      = page.get("country", "")
         server       = page.get("server",  "")
         title        = page.get("title",   "")
-        tls_days     = page.get("tlsValidDays")
         country_name = _COUNTRY_NAMES.get(country, country) if country else ""
+
+        
+        tls_days    = page.get("tlsValidDays")
+        tls_expired = page.get("tlsExpired", False)
+        tls_warning = page.get("tlsWarning", False)
+        tls_expires_on = page.get("tlsExpiresOn", "")
 
         identity_parts = []
         if domain:       identity_parts.append(f"Domaine : {domain}")
@@ -583,15 +581,28 @@ def _build_urlscan_recs(us: dict, recs: list) -> int:
         if identity_parts:
             _add(recs, "Info", "Informations identifiées — " + " | ".join(identity_parts) + ".")
 
-        if tls_days is not None:
-            if tls_days < 0:
-                _add(recs, "Critique",
-                     f"Certificat SSL expiré depuis {abs(tls_days)} jour(s) selon urlscan.io. "
-                     "Action : renouvelez immédiatement le certificat SSL.")
-            elif tls_days < 14:
-                _add(recs, "Important",
-                     f"Certificat SSL expire dans {tls_days} jour(s). "
-                     "Action : planifiez le renouvellement maintenant.")
+
+        if tls_expired:
+            risk += 20
+            _add(recs, "Critique",
+                 f"Certificat SSL expiré"
+                 f"{f' depuis le {tls_expires_on}' if tls_expires_on else ''}. "
+                 "Action : renouvelez immédiatement le certificat SSL.")
+        elif tls_days is not None and tls_days < 7:
+            risk += 15
+            _add(recs, "Critique",
+                 f"Certificat SSL expire dans {tls_days} jour(s) — urgence ! "
+                 "Action : renouvelez le certificat immédiatement.")
+        elif tls_days is not None and tls_days < 14:
+            risk += 8
+            _add(recs, "Important",
+                 f"Certificat SSL expire dans {tls_days} jour(s). "
+                 f"Date d'expiration : {tls_expires_on}. "
+                 "Action : planifiez le renouvellement maintenant.")
+        elif tls_warning:
+            _add(recs, "Important",
+                 f"Certificat SSL expire bientôt ({tls_days} jour(s) restants). "
+                 "Action : planifiez le renouvellement dans les prochains jours.")
 
         if country in ("CN", "RU", "KP", "IR"):
             _add(recs, "Info",
@@ -611,25 +622,21 @@ def _build_urlscan_recs(us: dict, recs: list) -> int:
         if brands:
             _add(recs, "Critique",
                  f"Usurpation de marque détectée : {', '.join(brands)}. "
-                 "Ce site imite une marque connue pour vous tromper. "
                  "Action : accédez à la vraie marque uniquement via son site officiel.")
     elif score_us > 75:
         risk += 25
         _add(recs, "Important",
              f"Comportement très suspect détecté (score {score_us}/100). "
-             "Ce site présente des caractéristiques associées aux sites malveillants. "
-             "Action : évitez de saisir des données personnelles et consultez le rapport urlscan.io.")
+             "Action : évitez de saisir des données personnelles.")
     elif score_us > 50:
         risk += 15
         _add(recs, "Important",
              f"Comportement suspect (score {score_us}/100). "
-             "Le site contacte des ressources inhabituelles. "
-             "Action : soyez prudent et vérifiez le rapport urlscan.io complet.")
+             "Action : vérifiez le rapport urlscan.io complet.")
     elif score_us > 20:
         risk += 5
         _add(recs, "Modéré",
-             f"Comportement légèrement inhabituel (score {score_us}/100). "
-             "Aucune menace directe, mais quelques signaux à surveiller.")
+             f"Comportement légèrement inhabituel (score {score_us}/100). Aucune menace directe.")
     else:
         _add(recs, "OK",
              f"Ce site se comporte normalement (score {score_us}/100). Aucune anomalie détectée.")
@@ -650,8 +657,8 @@ def _build_urlscan_recs(us: dict, recs: list) -> int:
     if domains_count > 30:
         risk += 5
         _add(recs, "Important",
-             f"Ce site contacte {domains_count} domaines externes — suivi intensif de votre navigation. "
-             "Action : utilisez un bloqueur de traceurs (uBlock Origin) pour limiter ce suivi.")
+             f"Ce site contacte {domains_count} domaines externes — suivi intensif. "
+             "Action : utilisez un bloqueur de traceurs (uBlock Origin).")
     elif domains_count > 15:
         _add(recs, "Info",
              f"Ce site contacte {domains_count} domaines externes (publicités, analytics, CDN).")

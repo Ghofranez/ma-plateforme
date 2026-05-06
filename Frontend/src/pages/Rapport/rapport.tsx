@@ -1435,24 +1435,14 @@ export default function Rapport() {
               );
             })}
 
-            {/* Info findings — résumé seulement */}
-            {bySeverity.info.length > 0 && (
-              <div className="bg-gray-50 rounded-xl px-3 py-2.5 border border-gray-100">
-                <p className="text-xs text-gray-500 font-semibold">
-                  ℹ {bySeverity.info.length} information(s) collectée(s) par Nuclei
-                </p>
-                <p className="text-[10px] text-gray-400 mt-0.5">
-                  {bySeverity.info.slice(0, 3).map((f: any) => f.name).join(", ")}
-                  {bySeverity.info.length > 3 ? `… +${bySeverity.info.length - 3}` : ""}
-                </p>
-              </div>
-            )}{bySeverity.info.length > 0 && (
+            {/* Info findings — version corrigée (un seul bloc) */}
+{bySeverity.info.length > 0 && (
   <div className="bg-gray-50 rounded-xl px-3 py-2.5 border border-gray-100">
     <p className="text-xs text-gray-600 font-semibold mb-1">
       ℹ {bySeverity.info.length} information(s) collectée(s)
     </p>
     <div className="flex flex-wrap gap-1 mt-1">
-     {[...new Set(bySeverity.info.map((f: any) => f.name_fr || f.name))].slice(0, 5).map((name: any, i: number) => (
+      {[...new Set(bySeverity.info.map((f: any) => f.name_fr || f.name))].slice(0, 5).map((name: any, i: number) => (
         <span key={i} className="text-[10px] bg-blue-50 text-blue-600 border border-blue-100 px-2 py-0.5 rounded-md font-medium">
           {name}
         </span>
@@ -1466,8 +1456,8 @@ export default function Rapport() {
     <p className="text-[10px] text-gray-400 mt-1.5 leading-snug">
       Ces informations décrivent la configuration du serveur — elles ne représentent pas des vulnérabilités directes.
     </p>
-        </div>
-        )}
+  </div>
+)}
           </div>
         )}
       </div>
