@@ -197,67 +197,102 @@ jobs:
   # JOB 4 — OWASP ZAP DAST
   ########################################################
   dast-zap:
-    name: DAST Scan (OWASP ZAP)
-    needs: health-check
-    if: success()
-    runs-on: self-hosted
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+   name: DAST Scan (OWASP ZAP)
+   needs: health-check
+   if: success()
+   runs-on: self-hosted
+   steps:
+    - name: Checkout
+      uses: actions/checkout@v4
 
+    - name: Login GHCR
+      run: |
+        echo "${{ secrets.PAT_TOKEN }}" | docker login ghcr.io \
+          -u ${{ github.actor }} --password-stdin
 
-      - name: Login GHCR
-        run: |
-          echo "${{ secrets.PAT_TOKEN }}" | docker login ghcr.io \
-            -u ${{ github.actor }} --password-stdin
+    - name: Create ZAP Report Directory
+      run: |
+        mkdir -p ${{ github.workspace }}/zap-report
+        chmod 777 ${{ github.workspace }}/zap-report
 
-      - name: Create ZAP Report Directory
-        run: |
-          mkdir -p ${{ github.workspace }}/zap-report
-          chmod 777 ${{ github.workspace }}/zap-report
-
-      - name: OWASP ZAP Scan
-        run: |
-          #  FIX: --network host est correct sur self-hosted Linux
-          # ZAP écrit dans /zap/wrk/ → monté sur zap-report/
-          docker run --rm \
-            --network host \
-            -v ${{ github.workspace }}/zap-report:/zap/wrk:rw \
-            ghcr.io/zaproxy/zaproxy:stable \
-            zap-baseline.py \
+    - name: OWASP ZAP Scan
+      run: |
+        # Exit codes ZAP: 0=OK, 1=alertes trouvées, 2=erreur fatale
+        # On capture le code pour distinguer les cas
+        set +e
+        docker run --rm \
+          --network host \
+          -v ${{ github.workspace }}/zap-report:/zap/wrk:rw \
+          ghcr.io/zaproxy/zaproxy:stable \
+          zap-baseline.py \
             -t http://localhost:8000 \
             -r zap-report.html \
             -J zap-report.json \
             -l WARN \
             -I
-          # FIX: vérifier explicitement que le rapport a bien été créé
-          if [ ! -f "${{ github.workspace }}/zap-report/zap-report.json" ]; then
-            echo "ZAP n'a pas généré de rapport — le scan a échoué silencieusement !"
-            exit 1
-          fi
+        ZAP_EXIT=$?
+        set -e
 
-      - name: Analyse ZAP Results
-        run: |
-          REPORT="${{ github.workspace }}/zap-report/zap-report.json"
-          # FIX: validation JSON avec jq avant parsing
-          if ! jq empty "$REPORT" 2>/dev/null; then
-            echo "Rapport ZAP malformé ou vide !"
-            exit 1
-          fi
-          # FIX: utiliser jq pour un parsing fiable
-          CRITICAL=$(jq '[.. | objects | select(.riskcode == "3")] | length' "$REPORT" || echo "0")
-          if [ "$CRITICAL" -gt "0" ]; then
-            echo "ZAP détecte $CRITICAL faille(s) CRITIQUE(S) !"
-            exit 1
-          fi
-          echo "Aucune faille critique détectée ✓"
+        echo "ZAP exit code: $ZAP_EXIT"
 
-      - name: Upload ZAP Report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: zap-report
-          path: ${{ github.workspace }}/zap-report/
+        # Exit code 2 = erreur fatale ZAP (pas de rapport généré)
+        if [ "$ZAP_EXIT" -eq 2 ]; then
+          echo "ZAP a rencontré une erreur fatale (exit 2) — aucun rapport généré."
+          exit 1
+        fi
+
+        # Vérifier que le fichier existe et n'est pas vide
+        REPORT="${{ github.workspace }}/zap-report/zap-report.json"
+        if [ ! -f "$REPORT" ]; then
+          echo "Fichier zap-report.json introuvable !"
+          ls -la ${{ github.workspace }}/zap-report/ || true
+          exit 1
+        fi
+
+        if [ ! -s "$REPORT" ]; then
+          echo "Fichier zap-report.json vide !"
+          exit 1
+        fi
+
+        echo "Rapport ZAP généré avec succès ($(wc -c < "$REPORT") bytes)"
+
+    - name: Analyse ZAP Results
+      run: |
+        REPORT="${{ github.workspace }}/zap-report/zap-report.json"
+
+        # Afficher les premières lignes pour debug 
+        echo "=== Aperçu du rapport ==="
+        head -c 500 "$REPORT" || true
+        echo ""
+
+        # Validation JSON stricte
+        if ! jq empty "$REPORT" 2>/dev/null; then
+          echo "Rapport ZAP malformé ! Contenu brut :"
+          cat "$REPORT"
+          exit 1
+        fi
+
+        # La structure ZAP JSON est : { "site": [ { "alerts": [...] } ] }
+        # Chaque alerte a un "riskcode": "3" (Critical), "2" (High), "1" (Medium), "0" (Low)
+        CRITICAL=$(jq '[.site[]?.alerts[]? | select(.riskcode == "3")] | length' "$REPORT" 2>/dev/null || echo "0")
+        HIGH=$(jq '[.site[]?.alerts[]? | select(.riskcode == "2")] | length' "$REPORT" 2>/dev/null || echo "0")
+
+        echo "Failles critiques : $CRITICAL"
+        echo "Failles hautes    : $HIGH"
+
+        if [ "$CRITICAL" -gt "0" ]; then
+          echo "ZAP détecte $CRITICAL faille(s) CRITIQUE(S) — build échoué !"
+          exit 1
+        fi
+
+        echo "Aucune faille critique détectée ✓"
+
+    - name: Upload ZAP Report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: zap-report
+        path: ${{ github.workspace }}/zap-report/
 
   ########################################################
   # JOB 5 — FALCO RUNTIME SECURITY

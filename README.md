@@ -117,7 +117,8 @@ Avant de lancer le projet en local, les outils suivants doivent etre installes s
 * Un compte GitHub — pour utiliser GitHub Actions et GHCR
 
 
-6. Lancer le projet en local
+6. Lancer le projet en local avec docker
+
 1- Cloner le dépot:
  - git clone https://github.com/Ghofranez/ma-plateforme.git
  - cd ma-plateforme
