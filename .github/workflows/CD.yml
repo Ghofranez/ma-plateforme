@@ -159,7 +159,7 @@ jobs:
         run: |
           for i in {1..15}; do
             # FIX: /health au lieu de / (endpoint dédié plus fiable)
-            if curl -sf http://localhost:8000/health; then
+            if curl -sf http://localhost:8000/; then
               echo "Backend opérationnel ✓"
               exit 0
             fi
@@ -332,7 +332,7 @@ jobs:
 
       - name: Recreate .env for rollback
         run: |
-          # ✅ FIX: heredoc sans indentation
+          # FIX: heredoc sans indentation
           cat > .env << 'EOF'
           MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }}
           MYSQL_DATABASE=${{ secrets.MYSQL_DATABASE }}
