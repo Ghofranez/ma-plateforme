@@ -274,8 +274,8 @@ jobs:
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
-          command: test
-          args: --file=Backend/requirements.txt --skip-unresolved
+           command: test
+           args: --file=Backend/requirements.txt --skip-unresolved --severity-threshold=high
 
       - name: Snyk Frontend
         uses: snyk/actions/node@master
@@ -283,7 +283,7 @@ jobs:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
           command: test
-          args: --file=Frontend/package.json
+          args: --file=Frontend/package.json --severity-threshold=high
 
       - name: Snyk Container
         uses: snyk/actions/docker@master

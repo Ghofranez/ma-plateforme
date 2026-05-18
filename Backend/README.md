@@ -214,37 +214,7 @@ Accès :
 
 ##   Docker
 
-- créer .env.docker comme env.docker.exemple:
-
-── MySQL ──────────────────────────────────────
-MYSQL_ROOT_PASSWORD=your_root_password
-MYSQL_DATABASE=your_db_name
-MYSQL_USER=your_db_user
-MYSQL_PASSWORD=your_db_password
-
- ── Ports ──────────────────────────────────────
-BACKEND_PORT=port_backend
-FRONTEND_PORT=port_frontend
-PHPMYADMIN_HOST_BINDING=Port_phpmyadmin
-ZAP_PORT=Port_zap
-
- ── Sécurité ───────────────────────────────────
-Générer avec : openssl rand -hex 32
-SECRET_KEY=ton_jwt_secret_key
-ZAP_API_KEY=ton_zap_api_key
-
-── SMTP ───────────────────────────────────────
-SMTP_EMAIL=ton@email.com
-SMTP_PASSWORD=ton_smtp_password
-
-── APIs de sécurité ───────────────────────────
-
-VIRUSTOTAL_KEY=ton_virustotal_api_key
-GOOGLE_SAFE_BROWSING_KEY=ton_google_safe_browsing_key
-URLSCAN_API_KEY=ton_urlscan_api_key
-
-── Redis / Celery ─────────────────────────────
-REDIS_URL=redis://redis:6379/0
+- créer .env.docker comme env.docker.exemple
 
 > cp .env.docker.example .env.docker
 
