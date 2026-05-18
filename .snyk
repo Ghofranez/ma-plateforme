@@ -1,19 +1,59 @@
-# .snyk
+# .snyk — Fichier de politique Snyk
+# Ce fichier liste les vulnérabilités à ignorer car :
+# - elles viennent de dépendances externes (nuclei) qu'on ne contrôle pas
+# - ou elles ne s'appliquent pas à notre environnement (Alpine vs Debian)
+
 version: v1.25.0
 ignore:
+
+  # ══════════════════════════════════════════════════════════
+  # NUCLEI — OpenTelemetry
+  # Ces CVE sont dans la bibliothèque de monitoring d'OpenTelemetry
+  # utilisée en interne par Nuclei — on ne peut pas les corriger
+  # ══════════════════════════════════════════════════════════
   SNYK-GOLANG-GOOPENTELEMETRYIOOTELPROPAGATION-15928420:
     - '*':
-        reason: Vulnerability in nuclei binary, updated at runtime
+        reason: CVE dans nuclei (OpenTelemetry) — correction dépend de nuclei upstream
         expires: 2026-12-31T00:00:00.000Z
+
   SNYK-GOLANG-GOOPENTELEMETRYIOOTELINTERNALGLOBAL-15928418:
     - '*':
-        reason: Vulnerability in nuclei binary, updated at runtime
+        reason: CVE dans nuclei (OpenTelemetry) — correction dépend de nuclei upstream
         expires: 2026-12-31T00:00:00.000Z
+
+  # ══════════════════════════════════════════════════════════
+  # DEBIAN — Non applicable
+  # Notre image Docker utilise Alpine (python:3.11-alpine)
+  # Ces CVE concernent Debian 13 → ne s'appliquent pas à nous
+  # ══════════════════════════════════════════════════════════
   SNYK-DEBIAN13-GNUTLS28-16344302:
     - '*':
-        reason: No fix available yet for Debian 13, migrating to Alpine
+        reason: CVE Debian 13 — notre image utilise Alpine, non concerné
         expires: 2026-12-31T00:00:00.000Z
+
   SNYK-DEBIAN13-GNUTLS28-16344314:
     - '*':
-        reason: No fix available yet for Debian 13, migrating to Alpine
+        reason: CVE Debian 13 — notre image utilise Alpine, non concerné
+        expires: 2026-12-31T00:00:00.000Z
+
+  # ══════════════════════════════════════════════════════════
+  # NUCLEI — go-git et golang.org/x/net
+  # Ces CVE sont dans les dépendances internes de Nuclei
+  # (go-git pour la gestion Git, x/net pour le réseau)
+  # Nuclei v3.8.0 les utilise — correction dépend d'une
+  # future mise à jour de Nuclei
+  # ══════════════════════════════════════════════════════════
+  SNYK-GOLANG-GOLANGORGXNETHTTP2-16535157:
+    - '*':
+        reason: CVE dans nuclei (golang.org/x/net) — correction dépend de nuclei upstream
+        expires: 2026-12-31T00:00:00.000Z
+
+  SNYK-GOLANG-GITHUBCOMGOGITGOGITV5PLUMBINGTRANSPORTHTTP-16109639:
+    - '*':
+        reason: CVE dans nuclei (go-git transport) — correction dépend de nuclei upstream
+        expires: 2026-12-31T00:00:00.000Z
+
+  SNYK-GOLANG-GITHUBCOMGOGITGOGITV5PLUMBINGOBJECT-16638689:
+    - '*':
+        reason: CVE dans nuclei (go-git object) — correction dépend de nuclei upstream
         expires: 2026-12-31T00:00:00.000Z
