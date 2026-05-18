@@ -316,6 +316,7 @@ jobs:
           severity: CRITICAL,HIGH
           exit-code: 1
           ignore-unfixed: true
+          trivyignores: .trivyignore
       - name: Trivy Backend Image
         uses: aquasecurity/trivy-action@master
         with:
@@ -324,6 +325,7 @@ jobs:
           severity: CRITICAL,HIGH
           exit-code: 1
           ignore-unfixed: true
+          trivyignores: .trivyignore
       - name: Trivy Frontend Image
         uses: aquasecurity/trivy-action@master
         with:

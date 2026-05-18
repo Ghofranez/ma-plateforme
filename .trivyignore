@@ -3,3 +3,6 @@ frontend/build/
 .venv/
 CVE-2026-34040
 CVE-2026-29181
+# Vulnérabilités dans nuclei (go-billy, go-git) — fix dépend de nuclei upstream
+CVE-2026-44973
+CVE-2026-45022
