@@ -1,7 +1,6 @@
 from sqlalchemy.orm import Session
 from app.core.entities.analysis import Analysis
-import json
-
+from datetime import datetime
 
 class AnalysisRepository:
     def __init__(self, db: Session):
@@ -9,47 +8,43 @@ class AnalysisRepository:
 
     def create_full(
         self,
-        user_email: str,
+        user_id: int,
+        user_email: str,       
         url: str,
         status: str,
         full_report,
         summary,
         risk_score: int = 0,
         recommendations: str = "",
-        has_changes: int = 0,
-        changes_summary: str = ""
+
     ):
         entry = Analysis(
+            user_id         = user_id,
             user_email      = user_email,
             url             = url,
             status          = status,
-            full_report     = full_report if isinstance(full_report, str) else json.dumps(full_report),
-            summary         = summary if isinstance(summary, str) else json.dumps(summary),
+            full_report     = full_report,
+            summary         = summary,
             risk_score      = risk_score,
             recommendations = recommendations,
-            has_changes     = has_changes,
-            changes_summary = changes_summary,
         )
         self.db.add(entry)
         self.db.commit()
         self.db.refresh(entry)
         return entry
 
-    def get_by_user(self, user_email: str):
-        """Récupère toutes les analyses d'un utilisateur, du plus récent au plus ancien"""
+    def get_by_user(self, user_id: int):
         return self.db.query(Analysis)\
-            .filter(Analysis.user_email == user_email)\
+            .filter(Analysis.user_id == user_id)\
             .order_by(Analysis.created_at.desc())\
             .all()
 
     def get_by_id(self, analysis_id: int):
-        """Récupère une analyse par son ID"""
         return self.db.query(Analysis)\
             .filter(Analysis.id == analysis_id)\
             .first()
 
     def delete(self, analysis_id: int) -> bool:
-        """Supprime une analyse par son ID"""
         entry = self.get_by_id(analysis_id)
         if not entry:
             return False
@@ -57,12 +52,21 @@ class AnalysisRepository:
         self.db.commit()
         return True
 
-    def get_last_by_url(self, user_email: str, url: str):
-        """Pour comparaison avec l'analyse précédente de la même URL"""
+    def get_last_by_url(self, user_id: int, url: str):
         return self.db.query(Analysis)\
             .filter(
-                Analysis.user_email == user_email,
-                Analysis.url == url
+                Analysis.user_id == user_id,
+                Analysis.url     == url,
             )\
             .order_by(Analysis.created_at.desc())\
             .first()
+
+    def get_active_by_user(self, user_id: int, since: datetime):
+        return self.db.query(Analysis)\
+            .filter(
+                Analysis.user_id == user_id,
+                Analysis.status.in_(["pending", "running"]),
+                Analysis.created_at >= since,
+            )\
+            .order_by(Analysis.created_at.desc())\
+            .all()

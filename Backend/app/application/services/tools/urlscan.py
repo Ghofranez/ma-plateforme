@@ -13,51 +13,91 @@ MAX_ATTEMPTS    = 12
 
 
 def get_ssl_info(hostname: str) -> dict:
-    """Récupère les infos SSL directement depuis le certificat du serveur."""
+    #Récupère les infos SSL directement depuis le certificat du serveur.
     try:
         ctx = ssl.create_default_context()
-        with ctx.wrap_socket(socket.socket(), server_hostname=hostname) as s:
-            s.settimeout(10)
-            s.connect((hostname, 443))
-            cert = s.getpeercert()
 
+        #  Connexion propre — timeout AVANT la connexion
+        with socket.create_connection((hostname, 443), timeout=10) as sock:
+            with ctx.wrap_socket(sock, server_hostname=hostname) as tls_sock:
+                cert = tls_sock.getpeercert()
+
+        if not cert:
+            return {
+                "valid":    False,
+                "expired":  False,
+                "warning":  False,
+                "daysLeft": None,
+                "error":    "Certificat vide",
+            }
+
+        not_after  = cert.get("notAfter", "")
+        not_before = cert.get("notBefore", "")
+
+        #  Parse de la date d'expiration
         expire_date = datetime.strptime(
-            cert["notAfter"], "%b %d %H:%M:%S %Y %Z"
+            not_after, "%b %d %H:%M:%S %Y %Z"
         ).replace(tzinfo=timezone.utc)
 
         start_date = datetime.strptime(
-            cert["notBefore"], "%b %d %H:%M:%S %Y %Z"
+            not_before, "%b %d %H:%M:%S %Y %Z"
         ).replace(tzinfo=timezone.utc)
 
         now        = datetime.now(timezone.utc)
         days_left  = (expire_date - now).days
         is_expired = days_left <= 0
-        is_warning = 0 < days_left <= 30
+        is_warning = 0 < days_left <= 14
 
-        # Extraire le Common Name (CN)
         subject = dict(x[0] for x in cert.get("subject", []))
         issuer  = dict(x[0] for x in cert.get("issuer",  []))
 
         return {
-            "valid":       not is_expired,
-            "expired":     is_expired,
-            "warning":     is_warning,
-            "daysLeft":    days_left,
-            "expiresOn":   expire_date.strftime("%Y-%m-%d"),
-            "issuedOn":    start_date.strftime("%Y-%m-%d"),
-            "subject":     subject.get("commonName", hostname),
-            "issuer":      issuer.get("organizationName", "Unknown"),
-            "protocol":    cert.get("version", "unknown"),
+            "valid":     not is_expired,
+            "expired":   is_expired,
+            "warning":   is_warning,
+            "daysLeft":  days_left,
+            "expiresOn": expire_date.strftime("%Y-%m-%d"),
+            "issuedOn":  start_date.strftime("%Y-%m-%d"),
+            "subject":   subject.get("commonName", hostname),
+            "issuer":    issuer.get("organizationName", "Unknown"),
+            "protocol":  "TLS",
         }
 
-    except ssl.SSLCertVerificationError:
+    except ssl.SSLCertVerificationError as e:
+        # Essayer quand même de lire le cert sans vérification
+        try:
+            ctx_noverify = ssl.create_default_context()
+            ctx_noverify.check_hostname = False
+            ctx_noverify.verify_mode    = ssl.CERT_NONE
+            with socket.create_connection((hostname, 443), timeout=10) as sock:
+                with ctx_noverify.wrap_socket(sock, server_hostname=hostname) as tls_sock:
+                    cert = tls_sock.getpeercert()
+            if cert:
+                not_after   = cert.get("notAfter", "")
+                expire_date = datetime.strptime(
+                    not_after, "%b %d %H:%M:%S %Y %Z"
+                ).replace(tzinfo=timezone.utc)
+                now       = datetime.now(timezone.utc)
+                days_left = (expire_date - now).days
+                return {
+                    "valid":     False,   # invalide car non vérifié
+                    "expired":   days_left <= 0,
+                    "warning":   0 < days_left <= 14,
+                    "daysLeft":  days_left,
+                    "expiresOn": expire_date.strftime("%Y-%m-%d"),
+                    "issuer":    "Non vérifié",
+                    "error":     "Certificat auto-signé ou invalide",
+                }
+        except Exception:
+            pass
         return {
             "valid":    False,
             "expired":  False,
             "warning":  False,
             "daysLeft": None,
-            "error":    "Certificat SSL invalide ou auto-signé",
+            "error":    f"Certificat SSL invalide : {e}",
         }
+
     except ssl.SSLError as e:
         return {
             "valid":    False,
@@ -85,7 +125,7 @@ def get_ssl_info(hostname: str) -> dict:
 
 
 def scan_urlscan(url: str) -> dict:
-    """Soumet une URL à urlscan.io et retourne le résultat complet."""
+ #Soumet une URL à urlscan.io et retourne le résultat complet.
 
     api_key = getattr(settings, "URLSCAN_API_KEY", "") or ""
     if not api_key:
@@ -173,7 +213,7 @@ def scan_urlscan(url: str) -> dict:
                 "country": data.get("page", {}).get("country"),
                 "server":  data.get("page", {}).get("server"),
                 "title":   data.get("page", {}).get("title"),
-                
+
                 "tlsValidDays":  ssl_info.get("daysLeft"),
                 "tlsExpired":    ssl_info.get("expired", False),
                 "tlsWarning":    ssl_info.get("warning", False),

@@ -12,7 +12,8 @@ RUN apk add --no-cache wget curl ca-certificates unzip git
 # Créer le dossier templates AVANT de changer d'utilisateur
 RUN adduser -D celeryuser && \
     mkdir -p /home/celeryuser/nuclei-templates && \
-    chown -R celeryuser:celeryuser /home/celeryuser
+    chown -R celeryuser:celeryuser /home/celeryuser && \
+    chown -R celeryuser:celeryuser /app
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir --timeout=300 --retries=5 -r requirements.txt

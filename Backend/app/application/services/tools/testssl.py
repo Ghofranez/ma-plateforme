@@ -1,8 +1,5 @@
 """
-tools/testssl.py — Analyse SSL/TLS native Python 
-
-Rôle : analyse le certificat et le chiffrement d'un site directement
-via les modules ssl + socket + cryptography de Python.
+tools/testssl.py — Analyse SSL/TLS native Python
 """
 
 import ssl
@@ -16,10 +13,10 @@ from urllib.parse import urlparse
 # ─────────────────────────────────────────────────────────────────────────────
 
 def scan_testssl(url: str) -> dict:
-    """
-    Analyse SSL/TLS d'une URL via les modules Python natifs.
-    Retourne un dict au format identique à scan_ssl (SSL Labs).
-    """
+
+    #Analyse SSL/TLS d'une URL via les modules Python natifs.
+    #Retourne un dict au format identique à scan_ssl (SSL Labs).
+
     try:
         parsed   = urlparse(url)
         hostname = parsed.hostname
@@ -48,7 +45,7 @@ def scan_testssl(url: str) -> dict:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _analyze_ssl(hostname: str, port: int) -> dict:
-    """Connecte en TLS et inspecte le certificat + la configuration."""
+    #Connecte en TLS et inspecte le certificat + la configuration.
 
     # ── 1. Connexion TLS avec vérification stricte ───────────────────────────
     context_strict = ssl.create_default_context()
@@ -124,7 +121,7 @@ def _analyze_ssl(hostname: str, port: int) -> dict:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _connect_no_verify(hostname: str, port: int) -> tuple[dict, str, tuple]:
-    """Connexion TLS sans vérification du certificat (pour lire les infos malgré tout)."""
+  #Connexion TLS sans vérification du certificat (pour lire les infos malgré tout).
     try:
         ctx = ssl.create_default_context()
         ctx.check_hostname = False
@@ -142,10 +139,10 @@ def _connect_no_verify(hostname: str, port: int) -> tuple[dict, str, tuple]:
 
 
 def _check_weak_protocols(hostname: str, port: int) -> list[str]:
-    """
-    Tente de se connecter avec TLS 1.0 et TLS 1.1 pour détecter leur support.
-    TLS 1.2 et 1.3 sont considérés sûrs et ne sont pas listés ici.
-    """
+    
+    #Tente de se connecter avec TLS 1.0 et TLS 1.1 pour détecter leur support.
+    #TLS 1.2 et 1.3 sont considérés sûrs et ne sont pas listés ici.
+
     weak = []
     for proto_name, ssl_version in [
         ("TLS1.0", ssl.TLSVersion.TLSv1),

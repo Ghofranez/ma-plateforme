@@ -10,7 +10,8 @@ import {
   InputOTPGroup,
   InputOTPSlot
 } from "../../components/ui/input-otp";
-import { verifyLoginCode, sendEmailCode } from "../../services/auth.service";
+import { verifyLoginCode, sendEmailCode, getMe } from "../../services/auth.service";
+import { useAuth } from "../../context/Scancontext";
 import toast from "react-hot-toast";
 
 export default function VerifyEmail() {
@@ -20,6 +21,7 @@ export default function VerifyEmail() {
   const [error, setError] = useState("");
 
   const navigate = useNavigate();
+  const { setUser } = useAuth();
   const location = useLocation();
   const email = location.state?.email || "";
 
@@ -44,8 +46,10 @@ export default function VerifyEmail() {
 
     try {
       await verifyLoginCode({ email, code: otp });
+      const res = await getMe();
+      setUser(res.data);
       navigate("/accueilpage");
-    } catch (err: any) {
+    }catch (err: any) {
       setError(err?.detail || "Code incorrect");
     } finally {
       setIsLoading(false);

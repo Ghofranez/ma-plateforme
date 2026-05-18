@@ -31,7 +31,7 @@ class Settings(BaseSettings):
         extra    = "ignore"         # ignore les variables inconnues sans erreur
 
     def validate_required(self):
-        """Appelle cette méthode au démarrage de l'app pour vérifier les clés critiques."""
+        #Appelle cette méthode au démarrage de l'app pour vérifier les clés critiques.
         if not self.DATABASE_URL:
             raise ValueError("DATABASE_URL manquante !")
         if not self.SECRET_KEY:

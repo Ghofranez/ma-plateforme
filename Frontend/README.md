@@ -47,9 +47,8 @@ Frontend/
 │   │   ├── Accueilpage/            # Page principale analyse URL
 │   │   ├── Historique/             # Historique des analyses
 │   │   ├── Profil/                 # Profil utilisateur
-│   ├── components/
-│   │   └── ui/                     # Composants réutilisables
-│   │   └── Sidebar/                # Navigation latérale
+|   |   ├── ConfirmationEmail/      # Confirmer le changement d'email
+│   ├── components/ui/              # Composants réutilisables
 │   └── tests/
 │       └── basic.test.ts           # Tests unitaires
 ├── public/                         # Assets statiques

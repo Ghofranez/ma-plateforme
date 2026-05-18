@@ -2,11 +2,11 @@ import httpx
 from app.core.config import settings
 
 def scan_safe_browsing(url: str) -> dict:
-    """
-    Vérifie si l'URL est dans les bases de données Google Safe Browsing.
-    Détecte : malware, phishing, unwanted software, social engineering.
 
-    """
+    #Vérifie si l'URL est dans les bases de données Google Safe Browsing.
+    #Détecte : malware, phishing, unwanted software, social engineering.
+
+
     try:
         if not getattr(settings, "GOOGLE_SAFE_BROWSING_KEY", None):
             return {"status": "disabled", "error": "Clé API Google Safe Browsing manquante"}

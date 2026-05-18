@@ -24,7 +24,7 @@ services:
       retries:      15
       start_period: 30s
 
-
+  # ── phpMyAdmin ────────────────────────────────────────────────────────────
   phpmyadmin:
     image: phpmyadmin:latest
     restart: always
@@ -40,11 +40,13 @@ services:
       db:
         condition: service_healthy
 
-
-
+  # ── Redis ─────────────────────────────────────────────────────────────────
   redis:
     image: redis:7-alpine
     restart: always
+    command: redis-server --appendonly yes
+    volumes:
+    - redis_data:/data
     networks:
       - internal
     healthcheck:
@@ -53,12 +55,16 @@ services:
       timeout:  3s
       retries:  5
 
-
-  # ── Backend (FastAPI / Uvicorn) ───────────────────────────────────────
+  # ── Backend (FastAPI / Uvicorn) ───────────────────────────────────────────
   backend:
     build: ./Backend
     image: my-backend:latest
     restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
     ports:
       - "${BACKEND_PORT}:8000"
     environment:
@@ -73,6 +79,7 @@ services:
       OPENPHISH_ENABLED:        "true"
       ZAP_API_KEY:              ${ZAP_API_KEY}
       ZAP_BASE_URL:             http://zap:8090
+      FRONTEND_URL:             ${FRONTEND_URL}
     networks:
       - internal
       - external
@@ -82,10 +89,18 @@ services:
       redis:
         condition: service_healthy
       zap:
-         condition: service_healthy
+        condition: service_healthy
 
-
-
+  # ── Vide la file Celery au démarrage ─────────────────────────────────────
+  celery-flush:
+    image: redis:7-alpine
+    command: redis-cli -h redis flushdb
+    networks:
+      - internal
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: "no"
 
   # ── Worker Celery ─────────────────────────────────────────────────────────
   worker:
@@ -93,9 +108,9 @@ services:
     image: my-backend:latest
     restart: always
     command: >
-        sh -c "nuclei -update-templates -ud /home/celeryuser/nuclei-templates/ &&
-        celery -A app.application.services.celery_app.celery_app
-        worker --loglevel=info --concurrency=2"
+      sh -c "nuclei -update-templates -ud /home/celeryuser/nuclei-templates/ &&
+      celery -A app.application.services.celery_app.celery_app
+      worker --loglevel=info --concurrency=2 -E"
     volumes:
       - nuclei_templates:/home/celeryuser/nuclei-templates
     dns:
@@ -113,6 +128,7 @@ services:
       OPENPHISH_ENABLED:        "true"
       ZAP_API_KEY:              ${ZAP_API_KEY}
       ZAP_BASE_URL:             http://zap:8090
+      FRONTEND_URL:             ${FRONTEND_URL}
     networks:
       - internal
       - external
@@ -122,10 +138,71 @@ services:
       redis:
         condition: service_healthy
       zap:
-         condition: service_healthy
+        condition: service_healthy
+      celery-flush:
+        condition: service_completed_successfully
 
+  # ── Celery Beat (planificateur surveillance) ──────────────────────────────
 
-# ── Frontend (Vite + Nginx) ───────────────────────────────────────────────
+  beat:
+    build: ./Backend
+    image: my-backend:latest
+    restart: always
+    command: >
+      celery -A app.application.services.celery_app.celery_app
+      beat --loglevel=info
+      --schedule=/app/celerybeat-schedule
+      --max-interval=30
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    environment:
+      DATABASE_URL:             mysql+mysqlconnector://${MYSQL_USER}:${MYSQL_PASSWORD}@db:3306/${MYSQL_DATABASE}
+      SECRET_KEY:               ${SECRET_KEY}
+      SMTP_EMAIL:               ${SMTP_EMAIL}
+      SMTP_PASSWORD:            ${SMTP_PASSWORD}
+      REDIS_URL:                ${REDIS_URL}
+      VIRUSTOTAL_KEY:           ${VIRUSTOTAL_KEY}
+      GOOGLE_SAFE_BROWSING_KEY: ${GOOGLE_SAFE_BROWSING_KEY}
+      URLSCAN_API_KEY:          ${URLSCAN_API_KEY}
+      OPENPHISH_ENABLED:        "true"
+      ZAP_API_KEY:              ${ZAP_API_KEY}
+      ZAP_BASE_URL:             http://zap:8090
+      FRONTEND_URL:             ${FRONTEND_URL}
+    networks:
+      - internal
+      - external
+    volumes:
+      - celerybeat_data:/app
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ── Flower (monitoring Celery) ────────────────────────────────────────────
+  flower:
+    image: mher/flower:2.0
+    restart: always
+    command: >
+      celery
+      --broker=${REDIS_URL}
+      flower
+      --port=5555
+      --basic_auth=${FLOWER_USER}:${FLOWER_PASSWORD}
+    ports:
+      - "${FLOWER_PORT}:5555"
+    environment:
+      CELERY_BROKER_URL: ${REDIS_URL}
+    networks:
+      - internal
+    depends_on:
+      redis:
+        condition: service_healthy
+      worker:
+        condition: service_started
+
+  # ── Frontend (Vite + Nginx) ───────────────────────────────────────────────
   frontend:
     build:
       context: ./Frontend
@@ -137,10 +214,10 @@ services:
       - internal
       - external
     depends_on:
-        backend:
-         condition: service_started
+      backend:
+        condition: service_started
 
-# ── OWASP ZAP ─────────────────────────────────────────────────────────────
+  # ── OWASP ZAP ─────────────────────────────────────────────────────────────
   zap:
     image: zaproxy/zap-stable
     container_name: zap
@@ -168,11 +245,11 @@ services:
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8090/JSON/core/view/version/?apikey=${ZAP_API_KEY}"]
       interval: 30s
-      timeout: 10s
-      retries: 5
+      timeout:  10s
+      retries:  5
       start_period: 90s
 
-# ── Réseau interne ────────────────────────────────────────────────────────────
+# ── Réseaux ───────────────────────────────────────────────────────────────────
 networks:
   internal:
     driver: bridge
@@ -184,4 +261,5 @@ networks:
 volumes:
   db_data:
   nuclei_templates:
-  nuclei_cache:
+  celerybeat_data:
+  redis_data:

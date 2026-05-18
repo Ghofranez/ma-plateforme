@@ -443,8 +443,8 @@ def _wait_for_spider(scan_id: str) -> bool:
 
 
 def _wait_for_passive_scan() -> bool:
-    """Attend max PASSIVE_TIMEOUT_S que ZAP finisse le scan passif.
-    Retourne True si terminé, False si timeout — dans les deux cas on continue."""
+    #Attend max PASSIVE_TIMEOUT_S que ZAP finisse le scan passif.
+    #Retourne True si terminé, False si timeout — dans les deux cas on continue.
     elapsed = 0
     while elapsed < PASSIVE_TIMEOUT_S:
         try:
@@ -496,7 +496,7 @@ def _parse_alerts(alerts: list) -> dict:
 
 
 def run_zap_scan(url: str) -> dict:
-    """Point d'entrée — appelé depuis scanner.py"""
+    #Point d'entrée — appelé depuis scanner.py
     try:
         # ── 0. Vérifier que ZAP est accessible ──
         try:

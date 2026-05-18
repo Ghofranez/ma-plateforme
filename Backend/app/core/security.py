@@ -1,7 +1,10 @@
 import jwt
 from datetime import datetime, timedelta, timezone
 from passlib.context import CryptContext
+from fastapi import Response, Request, HTTPException, Depends
+from sqlalchemy.orm import Session
 from app.core.config import settings
+from app.infrastructure.db.session import get_db
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -25,17 +28,34 @@ def decode_access_token(token: str):
     except jwt.InvalidTokenError:
         return None
 
-from fastapi import Response
-
-# Cookie HttpOnly = JavaScript ne peut pas le lire
-# → protège contre les attaques XSS
-
 def set_auth_cookie(response: Response, token: str):
     response.set_cookie(
         key="access_token",
         value=token,
-        httponly=True,       # ← JavaScript ne peut pas lire
-        secure=True,        # ← True en production (HTTPS)
-        samesite="lax",      # ← protection CSRF
-        max_age=3600,        # ← expire dans 1h (secondes)
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        max_age=settings.TOKEN_EXPIRE_MINUTES * 60,
     )
+
+# ──récupère l'utilisateur connecté depuis le cookie ────────────
+def get_current_user(request: Request, db: Session = Depends(get_db)):
+    from app.infrastructure.repositories.user_repo import UserRepository
+
+    token = request.cookies.get("access_token")
+    if not token:
+        raise HTTPException(401, "Non authentifié")
+
+    payload = decode_access_token(token)
+    if not payload:
+        raise HTTPException(401, "Token invalide ou expiré")
+
+    email = payload.get("sub")
+    if not email:
+        raise HTTPException(401, "Token invalide")
+
+    user = UserRepository(db).get_by_email(email)
+    if not user:
+        raise HTTPException(404, "Utilisateur non trouvé")
+
+    return user

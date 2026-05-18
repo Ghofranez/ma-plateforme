@@ -3,10 +3,10 @@ import httpx
 # ── Headers vérifiés : X-Frame-Options, CSP, HSTS, etc. ──────
 
 def scan_headers(url: str) -> dict:
-    """
-    Vérifie les headers HTTP de sécurité
+    
+    #Vérifie les headers HTTP de sécurité
 
-    """
+
     try:
         with httpx.Client(timeout=15, follow_redirects=True, verify=False) as client:
             res = client.get(url)

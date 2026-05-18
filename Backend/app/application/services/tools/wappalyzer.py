@@ -78,18 +78,18 @@ _SENSITIVE_CATEGORIES = {
 # ==============================================================================
 
 def _normalize(name: str) -> str:
-    """
-    Normalise un nom de technologie pour la comparaison.
-    Ex: "  WordPress  " → "wordpress"
-    On utilise strip() + lower() pour éviter les faux négatifs dus à la casse.
-    """
+    
+    #Normalise un nom de technologie pour la comparaison.
+    #Ex: "  WordPress  " → "wordpress"
+    #On utilise strip() + lower() pour éviter les faux négatifs dus à la casse.
+
     return name.strip().lower()
 
 
 def _assess_risk(tech_name: str, category: str = "") -> str:
-    """
-    Détermine le niveau de risque d'une technologie selon 3 règles (par priorité)
-    """
+
+    #Détermine le niveau de risque d'une technologie selon 3 règles (par priorité)
+
     normalized = _normalize(tech_name)
 
     # Règle 1 : correspondance exacte (la plus fiable)
@@ -111,10 +111,10 @@ def _assess_risk(tech_name: str, category: str = "") -> str:
 
 
 def _compute_risk_level(technologies: list[dict]) -> str:
-    """
-    Calcule le niveau de risque global de la stack détectée.
 
-    """
+    #Calcule le niveau de risque global de la stack détectée.
+
+
     if any(t["risk"] == "high"   for t in technologies):
         return "high"
     if any(t["risk"] == "medium" for t in technologies):
@@ -123,10 +123,10 @@ def _compute_risk_level(technologies: list[dict]) -> str:
 
 
 def _failure(error: str) -> dict:
-    """
-    Retourne un résultat d'échec standardisé.
 
-    """
+    #Retourne un résultat d'échec standardisé.
+
+
     return {
         "status":            "failed",
         "error":             error,
@@ -141,10 +141,8 @@ def _failure(error: str) -> dict:
 # ==============================================================================
 
 def scan_wappalyzer(url: str) -> dict:
-    """
-    Analyse la stack technologique d'un site web via builtwith.
 
-    """
+    #Analyse la stack technologique d'un site web via builtwith.
 
     # ── Étape 1 : Validation de l'URL ─────────────────────────────────────────
     try:

@@ -492,25 +492,30 @@ export default function Rapport() {
   /* ── Données brutes ── */
   const riskScore = rapport.risk_score ?? 0;
 
-  const headers            = rapport.full_report?.headers      ?? {};
-  const present: string[]  = headers.present ?? [];
-  const missing: string[]  = headers.missing ?? [];
-  const grade: string      = headers.grade   ?? "N/A";
+const fullReport = typeof rapport.full_report === "string"
+  ? (() => { try { return JSON.parse(rapport.full_report); } catch { return {}; } })()
+  : rapport.full_report ?? {};
 
-  const ssl = rapport.full_report?.ssl           ?? {};
-  const vt  = rapport.full_report?.virustotal    ?? {};
-  const sb  = rapport.full_report?.safe_browsing ?? {};
-  const us  = rapport.full_report?.urlscan       ?? {};
-  const sh  = rapport.full_report?.shodan        ?? {};
-  const wa  = rapport.full_report?.wappalyzer    ?? {};
-  const zap = rapport.full_report?.zap ?? {};
+const headers           = fullReport?.headers      ?? {};
+const present: string[] = headers.present ?? [];
+const missing: string[] = headers.missing ?? [];
+const grade: string     = headers.grade   ?? "N/A";
 
-  /* ── Résumé display généré par task.py ── */
-  const displaySummary   = rapport.full_report?.display?.summary   ?? null;
-  const displayRiskLabel = rapport.full_report?.display?.risk_level ?? null;
+const ssl = fullReport?.ssl           ?? {};
+const vt  = fullReport?.virustotal    ?? {};
+const sb  = fullReport?.safe_browsing ?? {};
+const us  = fullReport?.urlscan       ?? {};
+const sh  = fullReport?.shodan        ?? {};
+const wa  = fullReport?.wappalyzer    ?? {};
+const zap = fullReport?.zap           ?? {};
 
-  /* ── Recommandations ── */
-  const recsRaw = rapport.full_report?.recommendations ?? rapport.recommendations;
+const displaySummary   = fullReport?.display?.summary    ?? null;
+const displayRiskLabel = fullReport?.display?.risk_level ?? null;
+
+const recsRawRaw = fullReport?.recommendations ?? rapport.recommendations;
+  const recsRaw = typeof recsRawRaw === "string"
+     ? (() => { try { return JSON.parse(recsRawRaw); } catch { return null; } })()
+     : recsRawRaw;
 
   const recsHeaders = recsRaw ? filterRecs(parseRecs(recsRaw.headers))       : [];
   const recsSsl     = recsRaw ? filterRecs(parseRecs(recsRaw.ssl))           : [];
@@ -520,7 +525,7 @@ export default function Rapport() {
   const recsSh      = recsRaw ? filterRecs(parseRecs(recsRaw.shodan))        : [];
   const recsWa      = recsRaw ? filterRecs(parseRecs(recsRaw.wappalyzer))    : [];
   const recsZap     = recsRaw ? filterRecs(parseRecs(recsRaw.zap)) : [];
-  const nu = rapport.full_report?.nuclei ?? {};
+  const nu = fullReport?.nuclei ?? {};
   const recsNu = recsRaw ? filterRecs(parseRecs(recsRaw.nuclei)) : [];
   const scoreNu = computeToolScore(recsNu);
 

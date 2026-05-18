@@ -49,14 +49,15 @@ def _safe_run(fn, *args):
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Types d'erreurs pour lesquels le fallback n'apporterait aucune valeur ajoutée
+
 _NO_FALLBACK_ERROR_TYPES = {"rate_limit", "timeout", "network"}
 
 
 def _scan_ssl_with_fallback(url: str) -> dict:
-    """
-    Tente d'abord une analyse SSL via SSL Labs.
-    en cas d'erruer bascule automatiquement vers testssl.sh / Python natif.
-    """
+    
+    #Tente d'abord une analyse SSL via SSL Labs.
+    #en cas d'erruer bascule automatiquement vers testssl.sh / Python natif.
+
     result = _safe_run(scan_ssl, url)
 
     if result.get("status") == "completed":
@@ -110,7 +111,7 @@ def run_full_scan(url: str) -> dict:
         completed_futures = set()
         try:
             for future in concurrent.futures.as_completed(
-                future_to_key, timeout=360
+                future_to_key, timeout=560
             ):
                 key = future_to_key[future]
                 completed_futures.add(future)
@@ -136,7 +137,7 @@ def run_full_scan(url: str) -> dict:
                         future.cancel()
 
     finally:
-    
+
         executor.shutdown(wait=False, cancel_futures=True)
 
     return report

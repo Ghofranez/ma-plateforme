@@ -64,7 +64,7 @@ def scan_ssl(url: str) -> dict:
 
                 # ── Certificat ──────────────────────────────────────────────
                 cert_raw      = details.get("cert") or {}
-                not_after     = cert_raw.get("notAfter")       # timestamp ms
+                not_after     = cert_raw.get("notAfter")       
                 days_remaining = None
                 expiry_str    = None
                 issuer        = None

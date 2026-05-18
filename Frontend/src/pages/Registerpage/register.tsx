@@ -20,7 +20,7 @@ import { registerUser } from "../../services/auth.service";
 type FormData = {
   nom: string;
   prenom: string;
-  cin: string;
+  num: string;
   email: string;
   password: string;
   confirmPassword: string;
@@ -45,7 +45,7 @@ export default function Register() {
   const [formData, setFormData] = useState<FormData>({
     nom: "",
     prenom: "",
-    cin: "",
+    num: "",
     email: "",
     password: "",
     confirmPassword: "",
@@ -56,12 +56,12 @@ export default function Register() {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
 
-    if (name === "cin") {
+    if (name === "num") {
       if (!/^\d*$/.test(value)) return;
 
       setCinError(
         value.length > 0 && value.length !== 8
-          ? "Le CIN doit contenir exactement 8 chiffres"
+          ? "Le Numéro du téléphone doit contenir exactement 8 chiffres"
           : ""
       );
     }
@@ -72,9 +72,9 @@ export default function Register() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (cinError) return toast.error("CIN invalide");
+    if (cinError) return toast.error("Numéro invalide");
 
-    if (!formData.nom || !formData.prenom || !formData.cin || !formData.email || !formData.password || !formData.confirmPassword) {
+    if (!formData.nom || !formData.prenom || !formData.num || !formData.email || !formData.password || !formData.confirmPassword) {
       return toast.error("Veuillez remplir tous les champs");
     }
 
@@ -88,7 +88,7 @@ export default function Register() {
       await registerUser({
         nom: formData.nom,
         prenom: formData.prenom,
-        cin: formData.cin,
+        num: formData.num,
         email: formData.email,
         password: formData.password,
         confirm_password: formData.confirmPassword,
@@ -155,17 +155,17 @@ export default function Register() {
               </div>
             </div>
 
-            {/* CIN */}
+            {/* Num du telephone */}
             <div className="space-y-1">
-              <Label>CIN</Label>
+              <Label>Numéro du téléphone</Label>
               <div className="relative">
                 <CreditCard className="absolute left-3 top-3 text-slate-400 w-4 h-4" />
                 <Input
                   className="pl-10"
-                  name="cin"
-                  value={formData.cin}
+                  name="num"
+                  value={formData.num}
                   onChange={handleChange}
-                  placeholder="8 chiffres"
+                  placeholder="numéro du téléphone"
                   maxLength={8}
                 />
               </div>

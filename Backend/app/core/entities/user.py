@@ -7,6 +7,6 @@ class User(Base):
     id       = Column(Integer, primary_key=True, index=True)
     nom      = Column(String(100))
     prenom   = Column(String(100))
-    cin      = Column(String(255), unique=True)
+    num      = Column(String(8), unique=True)
     email    = Column(String(255), unique=True)
     password = Column(String(255))

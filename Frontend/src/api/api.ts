@@ -11,7 +11,7 @@ const api = axios.create({
 api.interceptors.request.use((config) => config);
 
 api.interceptors.response.use(
-  (response) => response.data,   // retourne data directement
+  (response) => response.data,   
   (error) => {
     if (error.response) {
       return Promise.reject(error.response.data);
