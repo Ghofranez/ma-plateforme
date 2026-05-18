@@ -18,7 +18,7 @@ def get_use_case(db: Session = Depends(get_db)):
 # ── Inscription ───────────────────────────────────────────────────────────
 @router.post("/register")
 def register(user: UserCreate, uc: AuthUseCases = Depends(get_use_case)):
-    return uc.register(user.nom, user.prenom, user.cin, user.email, user.password, user.confirm_password)
+    return uc.register(user.nom, user.prenom, user.num, user.email, user.password, user.confirm_password)
 
 # ── Login ─────────────────────────────────────────────────────────────────
 @router.post("/login")

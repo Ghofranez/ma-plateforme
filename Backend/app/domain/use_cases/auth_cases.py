@@ -5,7 +5,7 @@ from fastapi import HTTPException
 from app.core import security
 from app.application.services import otp
 
-# Stockage temporaire des tokens 
+# Stockage temporaire des tokens
 email_change_tokens: dict = {}
 
 class AuthUseCases:
@@ -22,13 +22,13 @@ class AuthUseCases:
         if not re.search(r'[!@#$%^&*(),.?]', password):
             raise HTTPException(400, "Le mot de passe doit contenir au moins un caractère spécial")
 
-    def register(self, nom, prenom, cin, email, password, confirm_password):
+    def register(self, nom, prenom, num, email, password, confirm_password):
         if password != confirm_password:
             raise HTTPException(400, "Passwords mismatch")
         self._validate_password(password)
         if self.user_repo.get_by_email(email):
             raise HTTPException(400, "Email already used")
-        self.user_repo.create(nom, prenom, cin, email, password)
+        self.user_repo.create(nom, prenom, num, email, password)
         return {"message": "User created"}
 
     def login(self, email, password):

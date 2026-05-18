@@ -396,6 +396,11 @@ jobs:
           ZAP_API_KEY=${{ secrets.ZAP_API_KEY }}
           ZAP_BASE_URL=http://zap:8090
           OPENPHISH_ENABLED=true
+          FLOWER_USER=${{ secrets.FLOWER_USER }}
+          FLOWER_PASSWORD=${{ secrets.FLOWER_PASSWORD }}
+          FLOWER_PORT=${{ secrets.FLOWER_PORT }}
+          FRONTEND_URL=${{ secrets.FRONTEND_URL }}  
+          ZAP_PORT=${{ secrets.ZAP_PORT }}
           PHPMYADMIN_HOST_BINDING=${{ secrets.PHPMYADMIN_HOST_BINDING }}
           BACKEND_PORT=${{ secrets.BACKEND_PORT }}
           FRONTEND_PORT=${{ secrets.FRONTEND_PORT }}

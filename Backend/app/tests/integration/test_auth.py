@@ -45,7 +45,7 @@ def test_register():
     response = client.post("/register", json={
         "nom": "Test",
         "prenom": "User",
-        "cin": "12345678",
+        "num": "12345678",
         "email": "testuser@test.com",
         "password": "Password123!",
         "confirm_password": "Password123!"
@@ -58,7 +58,7 @@ def test_register_duplicate_email():
     client.post("/register", json={
         "nom": "Test",
         "prenom": "User",
-        "cin": "12345678",
+        "num": "12345678",
         "email": "testuser@test.com",
         "password": "Password123!",
         "confirm_password": "Password123!"
@@ -67,7 +67,7 @@ def test_register_duplicate_email():
     response = client.post("/register", json={
         "nom": "Test2",
         "prenom": "User2",
-        "cin": "87654321",
+        "num": "87654321",
         "email": "testuser@test.com",
         "password": "Password123!",
         "confirm_password": "Password123!"

@@ -3,10 +3,11 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from app.core.config import settings
+import os
 
 # ─── URL Frontend ─────────────────────────────────────────────────────────────
 
-FRONTEND_URL = "http://localhost:3000"
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
 
 # ─── Email vérification OTP ───────────────────────────────────────────────────
