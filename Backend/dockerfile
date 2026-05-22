@@ -1,15 +1,15 @@
-FROM golang:1.25-alpine AS nuclei-builder
+FROM golang:1.24-alpine AS nuclei-builder
+
+# Forcer l'utilisation de la dernière version de nuclei (qui a mis à jour ses dépendances)
 RUN go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
 
 FROM python:3.11-alpine
 WORKDIR /app
-
 COPY --from=nuclei-builder /go/bin/nuclei /usr/local/bin/nuclei
 RUN chmod +x /usr/local/bin/nuclei
 
 RUN apk add --no-cache wget curl ca-certificates unzip git
 
-# Créer le dossier templates AVANT de changer d'utilisateur
 RUN adduser -D celeryuser && \
     mkdir -p /home/celeryuser/nuclei-templates && \
     chown -R celeryuser:celeryuser /home/celeryuser && \
@@ -19,10 +19,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --timeout=300 --retries=5 -r requirements.txt
 RUN pip install --upgrade setuptools wheel
 
-
-
 ENV NUCLEI_TEMPLATES_PATH=/home/celeryuser/nuclei-templates
-
 USER celeryuser
 COPY . .
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
