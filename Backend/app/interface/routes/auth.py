@@ -4,13 +4,32 @@ from app.infrastructure.db.session import get_db
 from app.infrastructure.repositories.user_repo import UserRepository
 from app.domain.use_cases.auth_cases import AuthUseCases, email_change_tokens
 from app.core.security import create_access_token, set_auth_cookie, get_current_user
+from app.core.entities.user import User
 from app.application.dto.auth_dto import (
     UserCreate, UserLogin, EmailRequest,
     VerifyLoginCode, VerifyResetCode, ResetPassword, ChangeEmail
 )
 from app.application.services import otp
+from app.middleware.auth_middleware import require_admin
 
 router = APIRouter()
+
+# ── Admin : liste des utilisateurs ───────────────────────────────────────
+@router.get("/admin/users")
+def list_users(
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin)
+):
+    users = db.query(User).all()
+    return [
+        {
+            "nom": u.nom,
+            "prenom": u.prenom,
+            "email": u.email,
+            "telephone": u.num
+        }
+        for u in users
+    ]
 
 def get_use_case(db: Session = Depends(get_db)):
     return AuthUseCases(UserRepository(db))
@@ -41,11 +60,14 @@ def send_email_code(data: EmailRequest, db: Session = Depends(get_db)):
 def verify_login_code(
     data: VerifyLoginCode,
     response: Response,
+    db: Session = Depends(get_db),
     uc: AuthUseCases = Depends(get_use_case)
 ):
     if not otp.verify_login_code(data.email, data.code):
         raise HTTPException(400, "Code invalide ou expiré")
-    token = create_access_token({"sub": data.email})
+
+    user = UserRepository(db).get_by_email(data.email)
+    token = create_access_token({"sub": data.email, "role": user.role})
     set_auth_cookie(response, token)
     return {"message": "Login successful"}
 

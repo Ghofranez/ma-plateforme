@@ -16,6 +16,11 @@ export const registerUser = (data: any) => {
 };
 
 // ─────────────────────────────
+// ADMIN
+// ─────────────────────────────
+export const getAdminUsers = () => api.get("/admin/users");
+
+// ─────────────────────────────
 // EMAIL VERIFICATION
 // ─────────────────────────────
 export const sendEmailCode  = (email: string) => api.post("/send-email-code", { email });
@@ -39,7 +44,7 @@ export const resetPassword = (data: {
 export const getMe          = () => api.get("/me");
 export const updateProfile  = (data: any) => api.put("/profil", data);
 export const changePassword = (data: any) => api.put("/change-password", data);
-// NOUVEAU : changement email en 2 étapes
+//  changement email en 2 étapes
 export const requestEmailChange = (data: { new_email: string; password: string }) =>
   api.put("/change-email/request", data);                    // envoie l'email de confirmation
 

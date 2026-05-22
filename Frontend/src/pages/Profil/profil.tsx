@@ -22,7 +22,7 @@ export default function Profile() {
   const [showNewPassword,     setShowNewPassword]     = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordFocused,     setPasswordFocused]     = useState(false);
-  const [original,            setOriginal]            = useState({ firstName: "", lastName: "" });
+  const [original,            setOriginal]            = useState({ firstName: "", lastName: "",num:"" });
   const [isDirty,             setIsDirty]             = useState(false);
 
   // ── État changement email ──
@@ -33,6 +33,7 @@ export default function Profile() {
 
   const [formData, setFormData] = useState({
     firstName: "", lastName: "", email: "",
+    num:"",
     currentPassword: "", newPassword: "", confirmPassword: "",
   });
 
@@ -44,10 +45,10 @@ export default function Profile() {
         const data = await getMe() as any;
         const loaded = {
           firstName: data.nom || "", lastName: data.prenom || "",
-          email: data.email || "", currentPassword: "", newPassword: "", confirmPassword: "",
+          email: data.email || "", num: data.num || "",currentPassword: "", newPassword: "", confirmPassword: "",
         };
         setFormData(loaded);
-        setOriginal({ firstName: loaded.firstName, lastName: loaded.lastName });
+        setOriginal({ firstName: loaded.firstName, lastName: loaded.lastName , num: loaded.num});
       } catch { toast.error("Erreur de chargement du profil"); }
       finally { setLoading(false); }
     })();
@@ -57,9 +58,13 @@ export default function Profile() {
     const { name, value } = e.target;
     setFormData(prev => {
       const updated = { ...prev, [name]: value };
-      if (name === "firstName" || name === "lastName") {
-        setIsDirty(updated.firstName !== original.firstName || updated.lastName !== original.lastName);
-      }
+     if (name === "firstName" || name === "lastName" || name === "num") {
+        setIsDirty(
+          updated.firstName !== original.firstName ||
+          updated.lastName  !== original.lastName  ||
+          updated.num       !== original.num
+     );
+    }
       return updated;
     });
   };
@@ -72,8 +77,8 @@ export default function Profile() {
   const saveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await updateProfile({ nom: formData.firstName, prenom: formData.lastName });
-      setOriginal({ firstName: formData.firstName, lastName: formData.lastName });
+      await updateProfile({ nom: formData.firstName, prenom: formData.lastName, num: formData.num });
+      setOriginal({ firstName: formData.firstName, lastName: formData.lastName ,num: formData.num });
       setIsDirty(false);
       setUpdateSuccess(true);
       toast.success("Profil mis à jour !");
@@ -101,7 +106,7 @@ export default function Profile() {
     }
     setEmailLoading(true);
     try {
-        await requestEmailChange(emailData);   
+        await requestEmailChange(emailData);
         toast.success("Un email de confirmation a été envoyé à votre adresse actuelle !");
         setShowEmailForm(false);
         setEmailData({ new_email: "", password: "" });
@@ -171,6 +176,17 @@ export default function Profile() {
                   name="lastName" value={formData.lastName} onChange={handleChange}
                   className="w-full px-3 py-2.5 text-sm bg-slate-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:bg-white transition"
                 />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-gray-500">Numéro de téléphone</label>
+                <input
+                   name="num"
+                   value={formData.num}
+                   onChange={handleChange}
+                   placeholder="Ex: 12345678"
+                   maxLength={8}
+                   className="w-full px-3 py-2.5 text-sm bg-slate-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:bg-white transition"
+                 />
               </div>
             </div>
 

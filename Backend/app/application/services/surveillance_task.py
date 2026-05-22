@@ -327,43 +327,40 @@ def _process_complet(surveil, new_rapport: dict, db):
     old_rapport = _parse_old_rapport(surveil)
     anomalies   = detect_anomalies(old_rapport, new_rapport) if old_rapport else []
 
+    try:
+        recommendations, risk_score = _build_recommendations(new_rapport)
+        display_report              = _build_display_report(new_rapport, recommendations, risk_score)
+    except Exception as e:
+        logger.error(f"[SURVEILLANCE] Erreur build recommendations : {e}")
+        recommendations = {}
+        risk_score      = 0
+        display_report  = {"risk_level": {"label": "Inconnu"}, "summary": ""}
+
+    # ── TOUJOURS sauvegarder le rapport ──────────────────────────────
+    analysis_id = _sauvegarder_analysis(
+        db              = db,
+        surveil         = surveil,
+        new_rapport     = new_rapport,
+        anomalies       = anomalies,
+        risk_score      = risk_score,
+        recommendations = recommendations,
+        display_report  = display_report,
+    )
+    if analysis_id:
+        db.commit()
+
+    # ── Envoi email selon résultat ────────────────────────────────────
     if not anomalies:
         logger.info(f"[SURVEILLANCE] Aucun changement pour {surveil.url}")
-        try:
-            _, risk_score = _build_recommendations(new_rapport)
-        except Exception:
-            risk_score = None
-
         send_scan_ok_alert(
             to_email   = surveil.user_email,
             url        = surveil.url,
             scan_type  = "complet (24h)",
             risk_score = risk_score,
+            analysis_id= analysis_id,
         )
     else:
         logger.warning(f"[SURVEILLANCE] {len(anomalies)} anomalie(s) sur {surveil.url}")
-        try:
-            recommendations, risk_score = _build_recommendations(new_rapport)
-            display_report              = _build_display_report(new_rapport, recommendations, risk_score)
-        except Exception as e:
-            logger.error(f"[SURVEILLANCE] Erreur build recommendations : {e}")
-            recommendations = {}
-            risk_score      = 0
-            display_report  = {"risk_level": {"label": "Inconnu"}, "summary": ""}
-
-        analysis_id = _sauvegarder_analysis(
-            db             = db,
-            surveil        = surveil,
-            new_rapport    = new_rapport,
-            anomalies      = anomalies,
-            risk_score     = risk_score,
-            recommendations= recommendations,
-            display_report = display_report,
-        )
-
-        if analysis_id:
-            db.commit()
-
         send_scan_complet_alert(
             to_email        = surveil.user_email,
             url             = surveil.url,
@@ -374,10 +371,9 @@ def _process_complet(surveil, new_rapport: dict, db):
             analysis_id     = analysis_id,
         )
 
-    surveil.last_rapport    = new_rapport
+    surveil.last_rapport = new_rapport
     surveil.last_scan_at = datetime.utcnow()
     repo.marquer_scannee(surveil, prochaine_heures=24)
-
 
 # ─── TÂCHE BEAT : dispatcher uniquement ───────────────────────────────────────
 

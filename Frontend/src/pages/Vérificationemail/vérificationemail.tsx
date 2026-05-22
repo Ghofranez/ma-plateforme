@@ -46,8 +46,8 @@ export default function VerifyEmail() {
 
     try {
       await verifyLoginCode({ email, code: otp });
-      const res = await getMe();
-      setUser(res.data);
+      const res = await getMe() as any;
+      setUser(res);
       navigate("/accueilpage");
     }catch (err: any) {
       setError(err?.detail || "Code incorrect");

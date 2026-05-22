@@ -20,6 +20,7 @@ import Historique from "./pages/Historique/historique";
 import Rapport from "./pages/Rapport/rapport";
 import RapportSurveillance from './pages/RapportSurveillance/rapportsurveillance';
 import ListeRapportsSurveillance from './pages/RapportSurveillance/listesrapport';
+import ListesUtilisateur from './pages/ListesUtilisateur/listesutilisateurs'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const [auth, setAuth] = useState<"loading" | "ok" | "ko">("loading");
@@ -82,6 +83,10 @@ function App() {
               <Route
                 path="/surveillance"
                 element={<Navigate to="/surveillance/rapports" replace />}
+              />
+             <Route
+                path="/admin/users"
+               element={<PrivateRoute><ListesUtilisateur /></PrivateRoute>}
               />
             </Route>
 

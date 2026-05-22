@@ -22,8 +22,8 @@ export default function Layout() {
   return (
     <div className="min-h-screen bg-slate-50 flex">
 
-      
-      <div className="sticky top-0 h-screen shrink-0">
+
+     <div className="sticky top-0 left-0 h-screen shrink-0">
         <Sidebar
           isOpen  = {isOpen}
           onClose = {() => setIsOpen(false)}

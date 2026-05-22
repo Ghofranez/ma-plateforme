@@ -4,10 +4,10 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   FingerprintIcon, LogOut, History, User,
   Home as HomeIcon, X, Loader2, CheckCircle,
-  XCircle, Bell, PanelLeft,
+  XCircle, Bell, PanelLeft, ShieldCheck,
 } from "lucide-react";
 import { logout } from "../../../services/auth.service";
-import { useScan } from "../../../context/Scancontext";
+import { useScan, useAuth } from "../../../context/Scancontext";
 
 interface SidebarProps {
   isOpen:  boolean;
@@ -15,18 +15,26 @@ interface SidebarProps {
   onOpen:  () => void;
 }
 
-const menuItems = [
-  { icon: HomeIcon, label: "Accueil",      path: "/accueilpage"           },
-  { icon: History,  label: "Historique",   path: "/historique"            },
-  { icon: Bell,     label: "Surveillance", path: "/surveillance/rapports" },
-  { icon: User,     label: "Profil",       path: "/profil"                },
+const baseMenuItems = [
+  { icon: HomeIcon,    label: "Accueil",        path: "/accueilpage"           },
+  { icon: History,     label: "Historique",      path: "/historique"            },
+  { icon: Bell,        label: "Surveillance",    path: "/surveillance/rapports" },
+  { icon: User,        label: "Profil",          path: "/profil"                },
 ];
+
+const adminItem = { icon: ShieldCheck, label: "Utilisateurs", path: "/admin/users" };
 
 // ── Rail fermé (52px) ──────────────────────────────────────────────────────
 function SidebarRail({ onOpen }: { onOpen: () => void }) {
   const location                           = useLocation();
   const navigate                           = useNavigate();
   const { activeScans, pendingCount }      = useScan();
+  const { user }                           = useAuth();
+
+  const menuItems = user?.role === "admin"
+    ? [...baseMenuItems, adminItem]
+    : baseMenuItems;
+
   const runningCount = activeScans.filter(
     s => s.status === "pending" || s.status === "running"
   ).length;
@@ -117,9 +125,14 @@ function SidebarRail({ onOpen }: { onOpen: () => void }) {
 
 // ── Sidebar ouverte (220px) ────────────────────────────────────────────────
 export function Sidebar({ isOpen, onClose, onOpen }: SidebarProps) {
-  const navigate                      = useNavigate();
-  const location                      = useLocation();
+  const navigate                           = useNavigate();
+  const location                           = useLocation();
   const { activeScans, removeScan, pendingCount } = useScan();
+  const { user }                           = useAuth();
+
+  const menuItems = user?.role === "admin"
+    ? [...baseMenuItems, adminItem]
+    : baseMenuItems;
 
   const runningCount = activeScans.filter(
     s => s.status === "pending" || s.status === "running"
@@ -187,7 +200,6 @@ export function Sidebar({ isOpen, onClose, onOpen }: SidebarProps) {
             En cours
           </p>
           <div className="bg-gray-50 rounded-lg overflow-hidden">
-            {/* Header compteur */}
             <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-gray-100">
               <span className="text-[11px] text-gray-500 flex items-center gap-1.5">
                 {runningCount > 0 && (
@@ -199,7 +211,6 @@ export function Sidebar({ isOpen, onClose, onOpen }: SidebarProps) {
               </span>
             </div>
 
-            {/* Liste scans */}
             <div className="flex flex-col max-h-[140px] overflow-y-auto">
               {activeScans.map(scan => (
                 <div key={scan.taskId} className="flex items-center gap-2 px-2.5 py-2 border-b border-gray-100 last:border-0">

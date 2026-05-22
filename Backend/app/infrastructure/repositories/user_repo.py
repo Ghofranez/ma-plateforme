@@ -14,17 +14,19 @@ class UserRepository:
 
     def create(self, nom, prenom, num, email, password):
         user = User(
-            nom=nom, prenom=prenom, num=num,
+            nom=nom, prenom=prenom, num=num if num else None,
             email=email, password=hash_password(password)
         )
         self.db.add(user)
         self.db.commit()
         return user
 
-    def update_profile(self, email: str, nom: str, prenom: str):
+    def update_profile(self, email: str, nom: str, prenom: str, num: str =None):
         user = self.get_by_email(email)
         user.nom    = nom
         user.prenom = prenom
+        if num :
+            user.num = num
         self.db.commit()
 
     def update_password(self, email: str, new_password: str):

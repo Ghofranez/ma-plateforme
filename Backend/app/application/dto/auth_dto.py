@@ -4,7 +4,7 @@ from pydantic import BaseModel, EmailStr
 class UserCreate(BaseModel):
     nom:              str
     prenom:           str
-    num:              str
+    num:              str | None = None
     email:            EmailStr
     password:         str
     confirm_password: str
@@ -38,6 +38,7 @@ class ResetPassword(BaseModel):
 class ProfileUpdate(BaseModel):
     nom:    str
     prenom: str
+    num: str | None = None
 
 # DTO pour changement de mot de passe
 class ChangePassword(BaseModel):

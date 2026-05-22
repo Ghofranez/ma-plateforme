@@ -40,8 +40,12 @@ class AuthUseCases:
 
     def verify_login(self, email, code):
         if not otp.verify_login_code(email, code):
-            raise HTTPException(400, "Code invalide ou expiré")
-        token = security.create_access_token({"sub": email})
+           raise HTTPException(400, "Code invalide ou expiré")
+        user = self.user_repo.get_by_email(email)
+        token = security.create_access_token({
+           "sub": email,
+           "role": user.role
+        })
         return {"access_token": token}
 
     def forgot_password(self, email):

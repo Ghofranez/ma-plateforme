@@ -191,14 +191,14 @@ def send_anomaly_alert(
         "complet": ("#059669", "Scan complet (72h)"),
     }
     scan_color, scan_label = scan_badges.get(scan_type, ("#6b7280", scan_type))
-
+    lien_html = _build_rapport_link(analysis_id)
     body = f"""
     <div style="font-family:Arial,sans-serif;max-width:650px;margin:auto;
                 border:1px solid #eee;border-radius:10px;overflow:hidden;">
 
       <!-- Header -->
       <div style="background:#1e3a5f;padding:24px;color:white;">
-        <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div style="display:block;text-align:right;">
           <div>
             <h2 style="margin:0;font-size:20px;"> Alerte de Surveillance</h2>
             <p style="margin:4px 0 0;opacity:.8;font-size:13px;">
@@ -418,13 +418,14 @@ def send_scan_ok_alert(
     url: str,
     scan_type: str,
     risk_score: int | None = None,
+    analysis_id=None,
 ):
     scan_badges = {
         "rapide (24h)": ("#0891b2", "Scan rapide (24h)"),
         "complet":      ("#059669", "Scan complet (72h)"),
     }
     scan_color, scan_label = scan_badges.get(scan_type, ("#6b7280", scan_type))
-
+    lien_html = _build_rapport_link(analysis_id)
     score_block = ""
     if risk_score is not None:
         if risk_score >= 70:   score_color = "#dc2626"
@@ -470,6 +471,7 @@ def send_scan_ok_alert(
                     font-family:monospace;word-break:break-all;
                     color:#1e3a5f;font-size:14px;">
           {url}
+
         </div>
 
         {score_block}
@@ -482,7 +484,7 @@ def send_scan_ok_alert(
             Votre site est conforme aux critères de sécurité vérifiés.
           </p>
         </div>
-
+         {lien_html}
       </div>
 
       <!-- Footer -->

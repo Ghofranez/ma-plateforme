@@ -15,6 +15,8 @@ def me(current_user: User = Depends(get_current_user)):
         "nom":    current_user.nom,
         "prenom": current_user.prenom,
         "email":  current_user.email,
+        "num":    current_user.num,
+        "role":   current_user.role,
     }
 
 @router.put("/profil")
@@ -23,7 +25,12 @@ def update_profile(
     current_user: User    = Depends(get_current_user),
     db:           Session = Depends(get_db),
 ):
-    UserRepository(db).update_profile(current_user.email, data.nom, data.prenom)
+    UserRepository(db).update_profile(
+        current_user.email,
+        data.nom,
+        data.prenom,
+        data.num        
+    )
     return {"message": "Profil mis à jour"}
 
 @router.put("/change-password")

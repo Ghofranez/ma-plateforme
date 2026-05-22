@@ -39,7 +39,7 @@ export default function Register() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
 
-  const [cinError, setCinError] = useState("");
+  const [numError, setnumError] = useState("");
   const navigate = useNavigate();
 
   const [formData, setFormData] = useState<FormData>({
@@ -59,7 +59,7 @@ export default function Register() {
     if (name === "num") {
       if (!/^\d*$/.test(value)) return;
 
-      setCinError(
+      setnumError(
         value.length > 0 && value.length !== 8
           ? "Le Numéro du téléphone doit contenir exactement 8 chiffres"
           : ""
@@ -72,9 +72,9 @@ export default function Register() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (cinError) return toast.error("Numéro invalide");
+    if (numError && formData.num) return toast.error("Numéro invalide");
 
-    if (!formData.nom || !formData.prenom || !formData.num || !formData.email || !formData.password || !formData.confirmPassword) {
+    if (!formData.nom || !formData.prenom || !formData.email || !formData.password || !formData.confirmPassword) {
       return toast.error("Veuillez remplir tous les champs");
     }
 
@@ -129,7 +129,7 @@ export default function Register() {
             {/* NOM / PRENOM */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label>Nom</Label>
+                <Label>Nom <span className="text-red-500">*</span></Label>
                 <div className="relative">
                   <User className="absolute left-3 top-3 text-slate-400 w-4 h-4" />
                   <Input className="pl-10"
@@ -142,7 +142,7 @@ export default function Register() {
               </div>
 
               <div className="space-y-1">
-                <Label>Prénom</Label>
+                <Label>Prénom <span className="text-red-500">*</span></Label>
                 <div className="relative">
                   <User className="absolute left-3 top-3 text-slate-400 w-4 h-4" />
                   <Input className="pl-10"
@@ -169,12 +169,12 @@ export default function Register() {
                   maxLength={8}
                 />
               </div>
-              {cinError && <p className="text-red-500 text-xs">{cinError}</p>}
+              {numError && <p className="text-red-500 text-xs">{numError}</p>}
             </div>
 
             {/* EMAIL */}
             <div className="space-y-1">
-              <Label>Email</Label>
+              <Label>Email<span className="text-red-500">*</span></Label>
               <div className="relative">
                 <Mail className="absolute left-3 top-3 text-slate-400 w-4 h-4" />
                 <Input
@@ -190,7 +190,7 @@ export default function Register() {
 
             {/* PASSWORD */}
             <div className="space-y-1">
-              <Label>Mot de passe</Label>
+              <Label>Mot de passe<span className="text-red-500">*</span></Label>
               <div className="relative">
                 <Lock className="absolute left-3 top-3 text-slate-400 w-4 h-4" />
                 <Input
@@ -231,7 +231,7 @@ export default function Register() {
 
             {/* CONFIRM */}
             <div className="space-y-1">
-              <Label>Confirmer mot de passe</Label>
+              <Label>Confirmer mot de passe<span className="text-red-500">*</span></Label>
               <div className="relative">
                 <Lock className="absolute left-3 top-3 text-slate-400 w-4 h-4" />
                 <Input
