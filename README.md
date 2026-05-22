@@ -354,6 +354,9 @@ Pipeline:
 * GITHUB_TOKEN : fourni automatiquement par GitHub Actions, rien à faire
 > Utilisé pour pousser les images Docker vers GHCR et accéder aux ressources du repo pendant le pipeline.
 
+* NOTIFY_EMAIL: email qui va recoit email lors de notifcation du CI/CD
+> Insérer dans secret dans github
+
 10. Lancement automatiques des pipelines (CI/CD):
 
 - À chaque git push, les pipelines se déclenchent automatiquement. Vous pouvez suivre l'exécution dans l'onglet Actions du repo GitHub.

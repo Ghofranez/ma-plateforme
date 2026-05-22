@@ -13,6 +13,45 @@ on:
 jobs:
 
   ########################################################
+  # JOB 0 — NOTIFICATION SI CI ÉCHOUÉ
+  ########################################################
+  notify-ci-failure:
+    name: Notify CI Failure
+    if: ${{ github.event.workflow_run.conclusion != 'success' }}
+    runs-on: self-hosted
+    steps:
+      - name: Send Email — CI Failed
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.SMTP_EMAIL }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "[CI ÉCHOUÉ] — Déploiement annulé | ${{ github.event.workflow_run.head_branch }}"
+          to: ${{ secrets.NOTIFY_EMAIL }}
+          from: "GitHub Actions <${{ secrets.SMTP_EMAIL }}>"
+          html_body: |
+            <h2 style="color:#cc0000;"> CI Pipeline Échoué</h2>
+            <p>Le déploiement a été <strong>annulé</strong> car le CI n'a pas passé.</p>
+            <table style="border-collapse:collapse; width:100%;">
+              <tr><td style="padding:8px; background:#f5f5f5;"><strong>Workflow</strong></td>
+                  <td style="padding:8px;">${{ github.event.workflow_run.name }}</td></tr>
+              <tr><td style="padding:8px; background:#f5f5f5;"><strong>Branche</strong></td>
+                  <td style="padding:8px;">${{ github.event.workflow_run.head_branch }}</td></tr>
+              <tr><td style="padding:8px; background:#f5f5f5;"><strong>Commit</strong></td>
+                  <td style="padding:8px;">${{ github.event.workflow_run.head_sha }}</td></tr>
+              <tr><td style="padding:8px; background:#f5f5f5;"><strong>Déclenché par</strong></td>
+                  <td style="padding:8px;">${{ github.event.workflow_run.triggering_actor.login }}</td></tr>
+            </table>
+            <br>
+            <a href="${{ github.event.workflow_run.html_url }}"
+               style="background:#cc0000; color:white; padding:10px 20px;
+                      text-decoration:none; border-radius:4px;">
+              Voir les logs CI
+            </a>
+
+  ########################################################
   # JOB 1 — VERIFICATION SIGNATURE COSIGN
   ########################################################
   cosign-verify:
@@ -45,8 +84,6 @@ jobs:
           COSIGN_PUBLIC_KEY: ${{ secrets.COSIGN_PUBLIC_KEY }}
         run: |
           echo "$COSIGN_PUBLIC_KEY" > cosign.pub
-          #  FIX: suppression du `if [ $? -ne 0 ]` inutile
-          # cosign exit non-zero → le step échoue automatiquement
           cosign verify --key cosign.pub ${{ steps.set-images.outputs.backend }}
           echo "Image backend vérifiée ✓"
 
@@ -54,7 +91,6 @@ jobs:
         env:
           COSIGN_PUBLIC_KEY: ${{ secrets.COSIGN_PUBLIC_KEY }}
         run: |
-          # FIX: cosign.pub recréé explicitement (pas de dépendance inter-steps)
           echo "$COSIGN_PUBLIC_KEY" > cosign.pub
           cosign verify --key cosign.pub ${{ steps.set-images.outputs.frontend }}
           echo "Image frontend vérifiée ✓"
@@ -65,11 +101,9 @@ jobs:
   deploy:
     name: Deploy Application
     needs: cosign-verify
-
     if: success()
     runs-on: self-hosted
     outputs:
-
       prev_backend:  ${{ steps.save-sha.outputs.prev_backend }}
       prev_frontend: ${{ steps.save-sha.outputs.prev_frontend }}
     steps:
@@ -91,7 +125,6 @@ jobs:
 
       - name: Create .env file
         run: |
-          #  FIX: heredoc sans indentation (les espaces étaient écrits dans le fichier)
           cat > .env << 'EOF'
           MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }}
           MYSQL_DATABASE=${{ secrets.MYSQL_DATABASE }}
@@ -139,7 +172,6 @@ jobs:
           echo "=== STATUS CONTENEURS ==="
           docker ps -a
           echo "=== LOGS BACKEND ==="
-          # FIX: head -1 pour éviter multi-ID si plusieurs conteneurs backend
           BACKEND_ID=$(docker ps -a --filter "name=backend" -q | head -1)
           [ -n "$BACKEND_ID" ] && docker logs "$BACKEND_ID" --tail 50 || echo "Pas de conteneur backend trouvé"
           echo "=== LOGS DB ==="
@@ -158,7 +190,6 @@ jobs:
       - name: Health Check Backend
         run: |
           for i in {1..15}; do
-            # FIX: /health au lieu de / (endpoint dédié plus fiable)
             if curl -sf http://localhost:8000/; then
               echo "Backend opérationnel ✓"
               exit 0
@@ -197,114 +228,109 @@ jobs:
   # JOB 4 — OWASP ZAP DAST
   ########################################################
   dast-zap:
-   name: DAST Scan (OWASP ZAP)
-   needs: health-check
-   if: success()
-   runs-on: self-hosted
-   steps:
-    - name: Checkout
-      uses: actions/checkout@v4
+    name: DAST Scan (OWASP ZAP)
+    needs: health-check
+    if: success()
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Login GHCR
-      run: |
-        echo "${{ secrets.PAT_TOKEN }}" | docker login ghcr.io \
-          -u ${{ github.actor }} --password-stdin
+      - name: Login GHCR
+        run: |
+          echo "${{ secrets.PAT_TOKEN }}" | docker login ghcr.io \
+            -u ${{ github.actor }} --password-stdin
 
-    - name: Create ZAP Report Directory
-      run: |
-        mkdir -p ${{ github.workspace }}/zap-report
-        chmod 777 ${{ github.workspace }}/zap-report
+      - name: Create ZAP Report Directory
+        run: |
+          mkdir -p ${{ github.workspace }}/zap-report
+          chmod 777 ${{ github.workspace }}/zap-report
 
-    - name: OWASP ZAP Scan
-      run: |
-        # Exit codes ZAP: 0=OK, 1=alertes trouvées, 2=erreur fatale
-        # On capture le code pour distinguer les cas
-        set +e
-        docker run --rm \
-          --network host \
-          -v ${{ github.workspace }}/zap-report:/zap/wrk:rw \
-          ghcr.io/zaproxy/zaproxy:stable \
-          zap-baseline.py \
-            -t http://localhost:8000 \
-            -r zap-report.html \
-            -J zap-report.json \
-            -l WARN \
-            -I
-        ZAP_EXIT=$?
-        set -e
+      - name: OWASP ZAP Scan
+        run: |
+          set +e
+          docker run --rm \
+            --network host \
+            -v ${{ github.workspace }}/zap-report:/zap/wrk:rw \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py \
+              -t http://localhost:8000 \
+              -r zap-report.html \
+              -J zap-report.json \
+              -l WARN \
+              -I
+          ZAP_EXIT=$?
+          set -e
 
-        echo "ZAP exit code: $ZAP_EXIT"
+          echo "ZAP exit code: $ZAP_EXIT"
 
-        # Exit code 2 = erreur fatale ZAP (pas de rapport généré)
-        if [ "$ZAP_EXIT" -eq 2 ]; then
-          echo "ZAP a rencontré une erreur fatale (exit 2) — aucun rapport généré."
-          exit 1
-        fi
+          if [ "$ZAP_EXIT" -eq 2 ]; then
+            echo "ZAP a rencontré une erreur fatale (exit 2) — aucun rapport généré."
+            exit 1
+          fi
 
-        # Vérifier que le fichier existe et n'est pas vide
-        REPORT="${{ github.workspace }}/zap-report/zap-report.json"
-        if [ ! -f "$REPORT" ]; then
-          echo "Fichier zap-report.json introuvable !"
-          ls -la ${{ github.workspace }}/zap-report/ || true
-          exit 1
-        fi
+          REPORT="${{ github.workspace }}/zap-report/zap-report.json"
+          if [ ! -f "$REPORT" ]; then
+            echo "Fichier zap-report.json introuvable !"
+            ls -la ${{ github.workspace }}/zap-report/ || true
+            exit 1
+          fi
 
-        if [ ! -s "$REPORT" ]; then
-          echo "Fichier zap-report.json vide !"
-          exit 1
-        fi
+          if [ ! -s "$REPORT" ]; then
+            echo "Fichier zap-report.json vide !"
+            exit 1
+          fi
 
-        echo "Rapport ZAP généré avec succès ($(wc -c < "$REPORT") bytes)"
+          echo "Rapport ZAP généré avec succès ($(wc -c < "$REPORT") bytes)"
 
-    - name: Analyse ZAP Results
-      run: |
-        # Installer jq si absent
-        if ! command -v jq &>/dev/null; then
-          echo "jq non trouvé — installation..."
-          sudo apt-get update -qq && sudo apt-get install -y -qq jq
-        fi
+      - name: Analyse ZAP Results
+        run: |
+          if ! command -v jq &>/dev/null; then
+            echo "jq non trouvé — installation..."
+            sudo apt-get update -qq && sudo apt-get install -y -qq jq
+          fi
 
-        REPORT="${{ github.workspace }}/zap-report/zap-report.json"
+          REPORT="${{ github.workspace }}/zap-report/zap-report.json"
 
-        if [ ! -s "$REPORT" ]; then
-          echo "Rapport ZAP manquant ou vide !"
-          exit 1
-        fi
+          if [ ! -s "$REPORT" ]; then
+            echo "Rapport ZAP manquant ou vide !"
+            exit 1
+          fi
 
-        echo "Taille du rapport : $(wc -c < "$REPORT") bytes"
+          echo "Taille du rapport : $(wc -c < "$REPORT") bytes"
 
-        CRITICAL=$(jq -r '[.site[]?.alerts[]? | select(.riskcode == "3")] | length' "$REPORT" 2>/dev/null || echo "0")
-        HIGH=$(jq -r '[.site[]?.alerts[]? | select(.riskcode == "2")] | length' "$REPORT" 2>/dev/null || echo "0")
-        MEDIUM=$(jq -r '[.site[]?.alerts[]? | select(.riskcode == "1")] | length' "$REPORT" 2>/dev/null || echo "0")
-        LOW=$(jq -r '[.site[]?.alerts[]? | select(.riskcode == "0")] | length' "$REPORT" 2>/dev/null || echo "0")
+          CRITICAL=$(jq -r '[.site[]?.alerts[]? | select(.riskcode == "3")] | length' "$REPORT" 2>/dev/null || echo "0")
+          HIGH=$(jq -r '[.site[]?.alerts[]? | select(.riskcode == "2")] | length' "$REPORT" 2>/dev/null || echo "0")
+          MEDIUM=$(jq -r '[.site[]?.alerts[]? | select(.riskcode == "1")] | length' "$REPORT" 2>/dev/null || echo "0")
+          LOW=$(jq -r '[.site[]?.alerts[]? | select(.riskcode == "0")] | length' "$REPORT" 2>/dev/null || echo "0")
 
-        echo "=============================="
-        echo "  Résultats ZAP Scan"
-        echo "=============================="
-        echo "  Critique  (riskcode 3) : $CRITICAL"
-        echo "  Haute     (riskcode 2) : $HIGH"
-        echo "  Moyenne   (riskcode 1) : $MEDIUM"
-        echo "  Faible    (riskcode 0) : $LOW"
-        echo "=============================="
+          echo "=============================="
+          echo "  Résultats ZAP Scan"
+          echo "=============================="
+          echo "  Critique  (riskcode 3) : $CRITICAL"
+          echo "  Haute     (riskcode 2) : $HIGH"
+          echo "  Moyenne   (riskcode 1) : $MEDIUM"
+          echo "  Faible    (riskcode 0) : $LOW"
+          echo "=============================="
 
-        if [ "$CRITICAL" -gt "0" ]; then
-          echo "ÉCHEC : $CRITICAL faille(s) CRITIQUE(S) détectée(s) !"
-          exit 1
-        fi
+          if [ "$CRITICAL" -gt "0" ]; then
+            echo "ÉCHEC : $CRITICAL faille(s) CRITIQUE(S) détectée(s) !"
+            exit 1
+          fi
 
-        if [ "$HIGH" -gt "0" ]; then
-          echo "ÉCHEC : $HIGH faille(s) HAUTE(S) détectée(s) !"
-          exit 1
-        fi
+          if [ "$HIGH" -gt "0" ]; then
+            echo "ÉCHEC : $HIGH faille(s) HAUTE(S) détectée(s) !"
+            exit 1
+          fi
 
-        echo "Aucune faille critique ou haute détectée ✓"
+          echo "Aucune faille critique ou haute détectée ✓"
 
-    - name: Upload ZAP Report
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: zap-report
-        path: ${{ github.workspace }}/zap-report/
+      - name: Upload ZAP Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-report
+          path: ${{ github.workspace }}/zap-report/
 
   ########################################################
   # JOB 5 — FALCO RUNTIME SECURITY
@@ -344,7 +370,6 @@ jobs:
 
       - name: Check Required Containers
         run: |
-          # FIX: ZAP retiré de la liste (il tourne en --rm, pas en démon)
           REQUIRED=("db" "redis" "backend" "worker" "frontend")
           ALL_OK=true
 
@@ -379,7 +404,6 @@ jobs:
 
       - name: Recreate .env for rollback
         run: |
-          # FIX: heredoc sans indentation
           cat > .env << 'EOF'
           MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }}
           MYSQL_DATABASE=${{ secrets.MYSQL_DATABASE }}
@@ -399,7 +423,7 @@ jobs:
           FLOWER_USER=${{ secrets.FLOWER_USER }}
           FLOWER_PASSWORD=${{ secrets.FLOWER_PASSWORD }}
           FLOWER_PORT=${{ secrets.FLOWER_PORT }}
-          FRONTEND_URL=${{ secrets.FRONTEND_URL }}  
+          FRONTEND_URL=${{ secrets.FRONTEND_URL }}
           ZAP_PORT=${{ secrets.ZAP_PORT }}
           PHPMYADMIN_HOST_BINDING=${{ secrets.PHPMYADMIN_HOST_BINDING }}
           BACKEND_PORT=${{ secrets.BACKEND_PORT }}
@@ -411,9 +435,6 @@ jobs:
       - name: Rollback to previous version
         run: |
           echo "=== ROLLBACK EN COURS ==="
-
-          #  FIX: digests récupérés depuis les outputs du job deploy
-          # (plus fiable que /tmp/ sur multi-runners)
           PREV_BACKEND="${{ needs.deploy.outputs.prev_backend }}"
           PREV_FRONTEND="${{ needs.deploy.outputs.prev_frontend }}"
 
@@ -424,7 +445,6 @@ jobs:
 
           docker pull "$PREV_BACKEND"
           docker tag  "$PREV_BACKEND" ghcr.io/${{ github.repository_owner }}/my-backend:latest
-
           docker pull "$PREV_FRONTEND"
           docker tag  "$PREV_FRONTEND" ghcr.io/${{ github.repository_owner }}/my-frontend:latest
 
@@ -437,7 +457,6 @@ jobs:
       - name: Verify Rollback
         run: |
           sleep 10
-          #  FIX: utiliser /health pour une vérification fiable
           if curl -sf http://localhost:8000/health; then
             echo "Backend OK après rollback ✓"
           else
@@ -446,22 +465,81 @@ jobs:
           fi
 
   ########################################################
-  # JOB 8 — NOTIFICATIONS
+  # JOB 8 — NOTIFICATIONS CD
   ########################################################
   notify:
     name: Notifications
-    needs: [verify-containers, cosign-verify]
+    needs: [verify-containers, cosign-verify, deploy]
     runs-on: self-hosted
-    if: always()
+    if: always() && github.event.workflow_run.conclusion == 'success'
     steps:
-      - name: Notify Success
-        if: ${{ needs.verify-containers.result == 'success' }}
-        run: |
-          echo " Déploiement réussi !"
-          echo "Backend  : ${{ needs.cosign-verify.outputs.backend_image }}"
-          echo "Frontend : ${{ needs.cosign-verify.outputs.frontend_image }}"
 
-      - name: Notify Failure
+      - name: Send Email — Déploiement Réussi
+        if: ${{ needs.verify-containers.result == 'success' }}
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.SMTP_EMAIL }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "[DÉPLOIEMENT OK] — ${{ github.event.workflow_run.head_branch }}"
+          to: ${{ secrets.NOTIFY_EMAIL }}
+          from: "GitHub Actions <${{ secrets.SMTP_EMAIL }}>"
+          html_body: |
+            <h2 style="color:#2e7d32;"> Déploiement Réussi</h2>
+            <p>L'application a été déployée avec succès en production.</p>
+            <table style="border-collapse:collapse; width:100%;">
+              <tr><td style="padding:8px; background:#f5f5f5;"><strong>Branche</strong></td>
+                  <td style="padding:8px;">${{ github.event.workflow_run.head_branch }}</td></tr>
+              <tr><td style="padding:8px; background:#f5f5f5;"><strong>Commit</strong></td>
+                  <td style="padding:8px;">${{ github.event.workflow_run.head_sha }}</td></tr>
+              <tr><td style="padding:8px; background:#f5f5f5;"><strong>Déclenché par</strong></td>
+                  <td style="padding:8px;">${{ github.actor }}</td></tr>
+              <tr><td style="padding:8px; background:#f5f5f5;"><strong>Backend</strong></td>
+                  <td style="padding:8px;">${{ needs.cosign-verify.outputs.backend_image }}</td></tr>
+              <tr><td style="padding:8px; background:#f5f5f5;"><strong>Frontend</strong></td>
+                  <td style="padding:8px;">${{ needs.cosign-verify.outputs.frontend_image }}</td></tr>
+            </table>
+            <br>
+            <a href="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+               style="background:#2e7d32; color:white; padding:10px 20px;
+                      text-decoration:none; border-radius:4px;">
+              Voir le pipeline
+            </a>
+
+      - name: Send Email — Déploiement Échoué
         if: ${{ needs.verify-containers.result != 'success' }}
-        run: |
-          echo "Déploiement échoué — vérifiez les logs GitHub Actions !"
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.SMTP_EMAIL }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: " [DÉPLOIEMENT ÉCHOUÉ] — ${{ github.event.workflow_run.head_branch }}"
+          to: ${{ secrets.NOTIFY_EMAIL }}
+          from: "GitHub Actions <${{ secrets.SMTP_EMAIL }}>"
+          html_body: |
+            <h2 style="color:#cc0000;"> Déploiement Échoué</h2>
+            <p>Une erreur s'est produite durant le pipeline CD. Un rollback a été tenté.</p>
+            <table style="border-collapse:collapse; width:100%;">
+              <tr><td style="padding:8px; background:#f5f5f5;"><strong>Branche</strong></td>
+                  <td style="padding:8px;">${{ github.event.workflow_run.head_branch }}</td></tr>
+              <tr><td style="padding:8px; background:#f5f5f5;"><strong>Commit</strong></td>
+                  <td style="padding:8px;">${{ github.event.workflow_run.head_sha }}</td></tr>
+              <tr><td style="padding:8px; background:#f5f5f5;"><strong>Déclenché par</strong></td>
+                  <td style="padding:8px;">${{ github.actor }}</td></tr>
+              <tr><td style="padding:8px; background:#f5f5f5;"><strong>cosign-verify</strong></td>
+                  <td style="padding:8px;">${{ needs.cosign-verify.result }}</td></tr>
+              <tr><td style="padding:8px; background:#f5f5f5;"><strong>deploy</strong></td>
+                  <td style="padding:8px;">${{ needs.deploy.result }}</td></tr>
+              <tr><td style="padding:8px; background:#f5f5f5;"><strong>verify-containers</strong></td>
+                  <td style="padding:8px;">${{ needs.verify-containers.result }}</td></tr>
+            </table>
+            <br>
+            <a href="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+               style="background:#cc0000; color:white; padding:10px 20px;
+                      text-decoration:none; border-radius:4px;">
+              Voir les logs CD
+            </a>

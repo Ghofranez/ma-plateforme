@@ -1,11 +1,32 @@
-FROM golang:1.24-alpine AS nuclei-builder
+FROM golang:1.26-alpine AS nuclei-builder
 
-# v3.3.9 est la dernière version compatible Go 1.24 avec x/crypto >= 0.52.0
-RUN go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@v3.3.9
+# Installer les outils nécessaires pour la compilation
+RUN apk add --no-cache git gcc musl-dev
+
+# Cloner nuclei pour pouvoir forcer la mise à jour des dépendances
+RUN git clone --depth 1 --branch v3.3.9 https://github.com/projectdiscovery/nuclei.git /nuclei
+
+WORKDIR /nuclei/cmd/nuclei
+
+# Forcer la mise à jour de toutes les dépendances vulnérables
+RUN go get github.com/antchfx/xpath@v1.3.6 && \
+    go get github.com/buger/jsonparser@v1.1.2 && \
+    go get github.com/getkin/kin-openapi@v0.131.0 && \
+    go get github.com/golang-jwt/jwt/v4@v4.5.2 && \
+    go get github.com/golang-jwt/jwt/v5@v5.2.2 && \
+    go get golang.org/x/crypto@v0.35.0 && \
+    go get golang.org/x/oauth2@v0.27.0 && \
+    go mod tidy
+
+# Compiler avec Go 1.26 (corrige les 8 CVEs stdlib)
+RUN go build -o /usr/local/bin/nuclei .
+
 
 FROM python:3.11-alpine
+
 WORKDIR /app
-COPY --from=nuclei-builder /go/bin/nuclei /usr/local/bin/nuclei
+
+COPY --from=nuclei-builder /usr/local/bin/nuclei /usr/local/bin/nuclei
 RUN chmod +x /usr/local/bin/nuclei
 
 RUN apk add --no-cache wget curl ca-certificates unzip git
@@ -20,6 +41,8 @@ RUN pip install --no-cache-dir --timeout=300 --retries=5 -r requirements.txt
 RUN pip install --upgrade setuptools wheel
 
 ENV NUCLEI_TEMPLATES_PATH=/home/celeryuser/nuclei-templates
+
 USER celeryuser
 COPY . .
+
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
