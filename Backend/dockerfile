@@ -1,7 +1,7 @@
 FROM golang:1.24-alpine AS nuclei-builder
 
-# Forcer l'utilisation de la dernière version de nuclei (qui a mis à jour ses dépendances)
-RUN go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
+# v3.3.9 est la dernière version compatible Go 1.24 avec x/crypto >= 0.52.0
+RUN go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@v3.3.9
 
 FROM python:3.11-alpine
 WORKDIR /app
