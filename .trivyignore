@@ -1,8 +1,26 @@
 node_modules/
 frontend/build/
 .venv/
+
+# JWT — fix upstream disponible mais bloque bytedance/sonic avec Go 1.26
 CVE-2026-34040
 CVE-2026-29181
+
 # Vulnérabilités dans nuclei (go-billy, go-git) — fix dépend de nuclei upstream
 CVE-2026-44973
 CVE-2026-45022
+
+# stdlib Go — incompatible avec Go 1.26 à cause de bytedance/sonic dans nuclei
+CVE-2026-25679
+CVE-2026-32280
+CVE-2026-32281
+CVE-2026-32283
+CVE-2026-33811
+CVE-2026-33814
+CVE-2026-39820
+CVE-2026-39836
+CVE-2026-42499
+
+# mholt/archiver/v3 — bibliothèque abandonnée, aucun fix disponible upstream
+CVE-2026-32285
+CVE-2026-32287

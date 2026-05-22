@@ -1,25 +1,25 @@
-FROM golang:1.26-alpine AS nuclei-builder
+FROM golang:1.24-alpine AS nuclei-builder
 
-# Installer les outils nécessaires pour la compilation
 RUN apk add --no-cache git gcc musl-dev
 
-# Cloner nuclei pour pouvoir forcer la mise à jour des dépendances
-RUN git clone --depth 1 --branch v3.3.9 https://github.com/projectdiscovery/nuclei.git /nuclei
+RUN git clone --depth 1 --branch v3.3.9 \
+    https://github.com/projectdiscovery/nuclei.git /nuclei
 
-WORKDIR /nuclei/cmd/nuclei
+WORKDIR /nuclei
 
-# Forcer la mise à jour de toutes les dépendances vulnérables
-RUN go get github.com/antchfx/xpath@v1.3.6 && \
-    go get github.com/buger/jsonparser@v1.1.2 && \
-    go get github.com/getkin/kin-openapi@v0.131.0 && \
+# Patcher uniquement les dépendances tierces (pas stdlib)
+RUN go get golang.org/x/crypto@v0.52.0 && \
+    go get golang.org/x/net@v0.36.0 && \
+    go get golang.org/x/oauth2@v0.27.0 && \
     go get github.com/golang-jwt/jwt/v4@v4.5.2 && \
     go get github.com/golang-jwt/jwt/v5@v5.2.2 && \
-    go get golang.org/x/crypto@v0.35.0 && \
-    go get golang.org/x/oauth2@v0.27.0 && \
+    go get github.com/buger/jsonparser@v1.1.2 && \
+    go get github.com/antchfx/xpath@v1.3.6 && \
+    go get github.com/aws/aws-sdk-go-v2/service/s3@v1.97.3 && \
+    go get github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream@v1.7.8 && \
     go mod tidy
 
-# Compiler avec Go 1.26 (corrige les 8 CVEs stdlib)
-RUN go build -o /usr/local/bin/nuclei .
+RUN go build -o /usr/local/bin/nuclei ./cmd/nuclei/
 
 
 FROM python:3.11-alpine
