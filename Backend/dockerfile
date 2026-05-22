@@ -8,6 +8,8 @@ RUN go get golang.org/x/crypto@v0.35.0 && \
     go get github.com/golang-jwt/jwt/v4@v4.5.2 && \
     go get github.com/golang-jwt/jwt/v5@v5.2.2 && \
     go get github.com/getkin/kin-openapi@v0.131.0 && \
+    go get github.com/buger/jsonparser@v1.1.2 && \
+    go get github.com/antchfx/xpath@v1.3.6 && \
     go mod tidy
 RUN go build -o /usr/local/bin/nuclei ./cmd/nuclei/
 
