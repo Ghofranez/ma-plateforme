@@ -82,8 +82,9 @@ ignore:
   SNYK-GOLANG-GOLANGORGXCRYPTOSSH-16795342:
     - '*':
         reason: >
-          x/crypto patchée à v0.52.0 dans le build,
-          résidu go.sum nuclei v3.3.9 — non exploitable
+          x/crypto v0.52.0 exige Go 1.25+, incompatible avec nuclei v3.3.9.
+          Patché à v0.35.0 (max compatible Go 1.25). CVEs SSH non exploitables
+          dans notre contexte.
         expires: 2026-12-31T00:00:00.000Z
   SNYK-GOLANG-GOLANGORGXCRYPTOSSH-16795344:
     - '*':

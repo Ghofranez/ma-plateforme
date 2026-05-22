@@ -1,4 +1,4 @@
-FROM golang:1.24-alpine AS nuclei-builder
+FROM golang:1.25-alpine AS nuclei-builder
 
 RUN apk add --no-cache git gcc musl-dev
 
@@ -7,8 +7,8 @@ RUN git clone --depth 1 --branch v3.3.9 \
 
 WORKDIR /nuclei
 
-# Patcher uniquement les dépendances tierces (pas stdlib)
-RUN go get golang.org/x/crypto@v0.52.0 && \
+# x/crypto max compatible Go 1.25 (< v0.52.0 qui exige Go 1.25+)
+RUN go get golang.org/x/crypto@v0.35.0 && \
     go get golang.org/x/net@v0.36.0 && \
     go get golang.org/x/oauth2@v0.27.0 && \
     go get github.com/golang-jwt/jwt/v4@v4.5.2 && \
