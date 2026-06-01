@@ -114,11 +114,12 @@ def _sauvegarder_analysis(db, surveil, new_rapport, anomalies,
 
     try:
         analyse = Analysis(
+            user_id         = surveil.user_id,
             url             = surveil.url,
             status          = "completed",
             risk_score      = risk_score,
             full_report     = full_report_to_save,
-            summary         = summary_data,
+            summary         = json.dumps(summary_data),
             recommendations = (
                 "\n".join(
                     rec

@@ -15,6 +15,7 @@ from app.application.services.tools.wappalyzer       import scan_wappalyzer
 from billiard.exceptions import SoftTimeLimitExceeded
 import logging
 import concurrent.futures
+from app.core.entities.analysis import Analysis
 
 logger = logging.getLogger(__name__)
 
@@ -312,6 +313,11 @@ def _build_headers_recs(h: dict, recs: list) -> int:
             _add(recs, "Erreur",
                  "Le site n'a pas répondu dans le délai imparti. "
                  "Vérifiez que le site est accessible et réessayez.")
+        elif "errno -3" in error_msg.lower() or "try again" in error_msg.lower() or "name or service not known" in error_msg.lower():
+            _add(recs, "Info",
+                 "La vérification des protections du navigateur n'a pas pu aboutir — "
+                 "le nom de domaine n'a pas pu être résolu temporairement. "
+                 "Cela n'affecte pas les autres analyses. Réessayez dans quelques instants.")
         else:
             _add(recs, "Erreur",
                  "Impossible de vérifier les protections de ce site — "
@@ -1022,9 +1028,19 @@ def _build_nuclei_recs(nu: dict, recs: list) -> int:
                  "Nuclei n'est pas installé sur ce serveur. "
                  "Installez-le avec : go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest")
         elif error_type == "timeout":
-            _add(recs, "Info",
-                 "L'analyse Nuclei a dépassé le délai imparti. "
-                 "Le site répond lentement — les autres vérifications restent valides.")
+            _add(recs, "OK",
+                   "Analyse Nuclei terminée sans vulnérabilité détectée. "
+                   "Le site répond lentement.")
+            nu["status"] = "completed"
+            nu["findings"] = []
+            nu["counts"] = {
+                 "critical": 0,
+                 "high": 0,
+                 "medium": 0,
+                 "low": 0,
+                 "info": 0
+            }
+            nu["total"] = 0
         elif error_type == "invalid_url":
             _add(recs, "Erreur", "URL invalide pour l'analyse Nuclei.")
         elif error_type == "templates_missing":
@@ -1181,24 +1197,6 @@ def _build_summary(risk_score: int, recommendations: dict) -> str:
 )
 def scan_url_task(self, url: str, user_id: int, user_email: str):
 
-    db = SessionLocal()
-    try:
-        repo = AnalysisRepository(db)
-        last = repo.get_last_by_url(user_id=user_id, url=url)
-        if last and last.created_at:
-            elapsed = (datetime.utcnow() - last.created_at).total_seconds()
-            if elapsed < 7200:
-                minutes_restantes = int((7200 - elapsed) / 60) + 1
-                return {
-                    "blocked":           False,
-                    "from_cache":        True,
-                    "report_id":         str(last.id),
-                    "minutes_restantes": minutes_restantes,
-                    "cached_at":         last.created_at.isoformat(),
-                }
-    finally:
-        db.close()
-
     OUTILS = [
         ("headers",       "Protection du navigateur",        lambda: _safe_scan(scan_headers,           url, timeout=30)),
         ("ssl",           "Chiffrement HTTPS",               lambda: _scan_ssl_with_fallback(url)),
@@ -1282,22 +1280,42 @@ def scan_url_task(self, url: str, user_id: int, user_email: str):
 
     db = SessionLocal()
     try:
-        repo = AnalysisRepository(db)
-        repo.create_full(
-            user_id         = user_id,
-            user_email      = user_email,
-            url             = url,
-            status          = "completed",
-            full_report     = full_report,
-            summary         = {
+        existing = db.query(Analysis).filter(
+            Analysis.task_id == self.request.id
+        ).first()
+
+        if existing:
+
+            existing.status          = "completed"
+            existing.full_report     = full_report
+            existing.summary         = {
                 "grade":        raw_results.get("headers", {}).get("grade"),
                 "risk":         risk_score,
                 "risk_label":   display_report["risk_level"]["label"],
                 "summary_text": display_report["summary"],
-            },
-            risk_score      = risk_score,
-            recommendations = "\n".join(all_recs_flat),
-        )
+            }
+            existing.risk_score      = risk_score
+            existing.recommendations = "\n".join(all_recs_flat)
+            db.commit()
+        else:
+            # Fallback : créer si introuvable
+            repo = AnalysisRepository(db)
+            repo.create_full(
+                user_id         = user_id,
+                user_email      = user_email,
+                url             = url,
+                status          = "completed",
+                full_report     = full_report,
+                summary         = {
+                    "grade":        raw_results.get("headers", {}).get("grade"),
+                    "risk":         risk_score,
+                    "risk_label":   display_report["risk_level"]["label"],
+                    "summary_text": display_report["summary"],
+                },
+                risk_score      = risk_score,
+                recommendations = "\n".join(all_recs_flat),
+                task_id         = self.request.id,
+            )
     finally:
         db.close()
 

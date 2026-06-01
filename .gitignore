@@ -19,9 +19,10 @@ nuclei-templates/
 # ── NODE (Frontend) ──────────────────────────────────
 # globale tous les node_modules dans tous les dossiers
 node_modules/
-frontend/dist/
-frontend/build/
-frontend/coverage/
+Frontend/dist/
+Frontend/build/
+Frontend/coverage/
+Frontend/certs
 
 # ── DOCKER LOGS ──────────────────────────────────────
 *.log

@@ -1,44 +1,51 @@
 import httpx
+import time
 
-# ── Headers vérifiés : X-Frame-Options, CSP, HSTS, etc. ──────
+SECURITY_HEADERS = [
+    "X-Frame-Options",
+    "X-Content-Type-Options",
+    "Strict-Transport-Security",
+    "Content-Security-Policy",
+    "X-XSS-Protection",
+    "Referrer-Policy",
+]
 
 def scan_headers(url: str) -> dict:
-    
-    #Vérifie les headers HTTP de sécurité
+    last_error = None
 
+    for attempt in range(3):
+        try:
+            with httpx.Client(
+                timeout=20,
+                follow_redirects=True,
+                verify=False,
+                transport=httpx.HTTPTransport(retries=2),
+            ) as client:
+                res = client.get(url)
+                headers = res.headers
 
-    try:
-        with httpx.Client(timeout=15, follow_redirects=True, verify=False) as client:
-            res = client.get(url)
-            headers = res.headers
+                checks  = {h: headers.get(h.lower()) for h in SECURITY_HEADERS}
+                present = [k for k, v in checks.items() if v]
+                missing = [k for k, v in checks.items() if not v]
+                score   = len(present)
 
-            # Headers de sécurité à vérifier
-            checks = {
-                "X-Frame-Options":           headers.get("x-frame-options"),            # anti-clickjacking
-                "X-Content-Type-Options":    headers.get("x-content-type-options"),
-                "Strict-Transport-Security": headers.get("strict-transport-security"),  # force HTTPS
-                "Content-Security-Policy":   headers.get("content-security-policy"),    # anti-XSS
-                "X-XSS-Protection":          headers.get("x-xss-protection"),
-                "Referrer-Policy":           headers.get("referrer-policy"),
-            }
+                if score >= 5:   grade = "A"
+                elif score >= 3: grade = "B"
+                elif score >= 1: grade = "C"
+                else:            grade = "F"
 
-            present = [k for k, v in checks.items() if v]
-            missing = [k for k, v in checks.items() if not v]
-            score   = len(present)
+                return {
+                    "status":  "completed",
+                    "grade":   grade,
+                    "score":   f"{score}/6",
+                    "present": present,
+                    "missing": missing,
+                    "safe":    score >= 4,
+                }
 
-            if score >= 5:   grade = "A"
-            elif score >= 3: grade = "B"
-            elif score >= 1: grade = "C"
-            else:            grade = "F"
+        except Exception as e:
+            last_error = str(e)
+            if attempt < 2:
+                time.sleep(2)
 
-            return {
-                "status":  "completed",
-                "grade":   grade,
-                "score":   f"{score}/6",
-                "present": present,
-                "missing": missing,
-                "safe":    score >= 4
-            }
-
-    except Exception as e:
-        return {"status": "failed", "error": str(e)}
+    return {"status": "failed", "error": last_error}

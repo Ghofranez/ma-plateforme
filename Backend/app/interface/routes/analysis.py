@@ -36,6 +36,17 @@ def analyze_url(
 
     task = scan_url_task.delay(str(data.url), current_user.id, current_user.email)
 
+    db_analysis = Analysis(
+        user_id    = current_user.id,
+        user_email = current_user.email,
+        url        = str(data.url),
+        status     = "processing",
+        task_id    = task.id,        
+    )
+    db.add(db_analysis)
+    db.commit()
+    db.refresh(db_analysis)
+
     r = get_redis()
     r.setex(
         f"scan:{current_user.id}:{task.id}",
@@ -138,7 +149,7 @@ def get_tasks_en_cours(
     db:           Session = Depends(get_db),
 ):
     r    = get_redis()
-    keys = r.keys(f"scan:{current_user.id}:*")   
+    keys = r.keys(f"scan:{current_user.id}:*")
     tasks = []
 
     for key in keys:

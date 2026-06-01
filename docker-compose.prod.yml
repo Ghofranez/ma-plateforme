@@ -48,7 +48,7 @@ services:
       timeout:  3s
       retries:  5
 
-  # ── Vide la file Celery au démarrage ──────────────── 
+  # ── Vide la file Celery au démarrage ────────────────
   celery-flush:
     image: redis:7-alpine
     command: redis-cli -h redis flushdb
@@ -192,6 +192,7 @@ services:
     restart: always
     ports:
       - "${FRONTEND_PORT}:80"
+      - "${FRONTEND_HTTPS_PORT}:443"
     networks:
       - internal
       - external

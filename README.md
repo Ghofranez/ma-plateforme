@@ -383,7 +383,7 @@ git push -u origin $nomdubranche    # envoie tes sauvegardes locales vers GitHub
 11. Infrastructure de déploiement
 Pour le déploiement, j'utilise une machine virtuelle Ubuntu Server sur VirtualBox sur laquelle tourne à la fois le runner GitHub Actions (self-hosted) et le serveur Nginx.
 
-Pourquoi un runner self-hosted ?
+> Pourquoi un runner self-hosted ?
 Ma VM est en local sur VirtualBox, donc GitHub ne peut pas y accéder directement. Le runner est installé sur la VM pour qu'il écoute GitHub et exécute le déploiement de mon côté.
 
 > Voici toutes les étapes que j'ai suivies pour tout configurer :
@@ -398,7 +398,6 @@ Docker est nécessaire pour lancer les containers de l'application sur le serveu
 
 Le runner self-hosted permet à GitHub Actions de lancer le déploiement directement sur ma VM .
 
-> J'ai utilisé un runner self-hosted parce que ma VM est en local sur VirtualBox, donc GitHub ne peut pas y accéder directement. Le runner est installé sur la VM pour qu'il écoute GitHub et exécute le déploiement de mon côté.
 
 4- Installer et configurer Nginx:
 
@@ -409,6 +408,19 @@ Nginx comme reverse proxy : il reçoit les requêtes et les redirige vers le bon
 > Backend: http://127.0.0.1:8000
 
 5- Installer Falco : un outil qui surveille le comportement des containers en temps réel (accès fichiers suspects, commandes inhabituelles, etc.).
+
+6- Installer cosign (pour vérifier es signatures des images GHCR.)
+
+curl -sSfL https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64 \
+  -o /usr/local/bin/cosign
+
+chmod +x /usr/local/bin/cosign
+
+cosign version
+
+7- Installer health-check et dast-zap:
+
+sudo apt install -y curl jq  # jq:Parser le rapport ZAP JSON , curl :Health checks
 
 Schéma de flux :
 

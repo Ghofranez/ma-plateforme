@@ -9,13 +9,14 @@ class AnalysisRepository:
     def create_full(
         self,
         user_id: int,
-        user_email: str,       
+        user_email: str,
         url: str,
         status: str,
         full_report,
         summary,
         risk_score: int = 0,
         recommendations: str = "",
+        task_id: str = None,
 
     ):
         entry = Analysis(
@@ -27,6 +28,7 @@ class AnalysisRepository:
             summary         = summary,
             risk_score      = risk_score,
             recommendations = recommendations,
+            task_id         = task_id,
         )
         self.db.add(entry)
         self.db.commit()
