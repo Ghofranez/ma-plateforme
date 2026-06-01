@@ -125,28 +125,34 @@ jobs:
 
       - name: Create .env file
         run: |
-          cat > .env << 'EOF'
-          MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }}
-          MYSQL_DATABASE=${{ secrets.MYSQL_DATABASE }}
-          MYSQL_USER=${{ secrets.MYSQL_USER }}
-          MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }}
-          DATABASE_URL=${{ secrets.DATABASE_URL }}
-          SECRET_KEY=${{ secrets.SECRET_KEY }}
-          SMTP_EMAIL=${{ secrets.SMTP_EMAIL }}
-          SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}
-          REDIS_URL=${{ secrets.REDIS_URL }}
-          VIRUSTOTAL_KEY=${{ secrets.VIRUSTOTAL_KEY }}
-          GOOGLE_SAFE_BROWSING_KEY=${{ secrets.GOOGLE_SAFE_BROWSING_KEY }}
-          URLSCAN_API_KEY=${{ secrets.URLSCAN_API_KEY }}
-          ZAP_API_KEY=${{ secrets.ZAP_API_KEY }}
-          ZAP_BASE_URL=http://zap:8090
-          OPENPHISH_ENABLED=true
-          PHPMYADMIN_HOST_BINDING=${{ secrets.PHPMYADMIN_HOST_BINDING }}
-          BACKEND_PORT=${{ secrets.BACKEND_PORT }}
-          FRONTEND_PORT=${{ secrets.FRONTEND_PORT }}
-          BACKEND_IMAGE=${{ needs.cosign-verify.outputs.backend_image }}
-          FRONTEND_IMAGE=${{ needs.cosign-verify.outputs.frontend_image }}
-          EOF
+         cat > .env << 'EOF'
+         MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }}
+         MYSQL_DATABASE=${{ secrets.MYSQL_DATABASE }}
+         MYSQL_USER=${{ secrets.MYSQL_USER }}
+         MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }}
+         DATABASE_URL=${{ secrets.DATABASE_URL }}
+         SECRET_KEY=${{ secrets.SECRET_KEY }}
+         SMTP_EMAIL=${{ secrets.SMTP_EMAIL }}
+         SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}
+         REDIS_URL=${{ secrets.REDIS_URL }}
+         VIRUSTOTAL_KEY=${{ secrets.VIRUSTOTAL_KEY }}
+         GOOGLE_SAFE_BROWSING_KEY=${{ secrets.GOOGLE_SAFE_BROWSING_KEY }}
+         URLSCAN_API_KEY=${{ secrets.URLSCAN_API_KEY }}
+         ZAP_API_KEY=${{ secrets.ZAP_API_KEY }}
+         ZAP_BASE_URL=http://zap:8090
+         OPENPHISH_ENABLED=true
+         PHPMYADMIN_HOST_BINDING=${{ secrets.PHPMYADMIN_HOST_BINDING }}
+         BACKEND_PORT=${{ secrets.BACKEND_PORT }}
+         FRONTEND_PORT=${{ secrets.FRONTEND_PORT }}
+         FRONTEND_HTTPS_PORT=${{ secrets.FRONTEND_HTTPS_PORT }}
+         FLOWER_PORT=${{ secrets.FLOWER_PORT }}
+         FLOWER_USER=${{ secrets.FLOWER_USER }}
+         FLOWER_PASSWORD=${{ secrets.FLOWER_PASSWORD }}
+         FRONTEND_URL=${{ secrets.FRONTEND_URL }}
+         ZAP_PORT=${{ secrets.ZAP_PORT }}
+         BACKEND_IMAGE=${{ needs.cosign-verify.outputs.backend_image }}
+         FRONTEND_IMAGE=${{ needs.cosign-verify.outputs.frontend_image }}
+         EOF
           echo "=== .env créé (clés masquées) ==="
           cat .env | sed 's/=.*/=***/'
 
@@ -420,16 +426,17 @@ jobs:
           ZAP_API_KEY=${{ secrets.ZAP_API_KEY }}
           ZAP_BASE_URL=http://zap:8090
           OPENPHISH_ENABLED=true
-          FLOWER_USER=${{ secrets.FLOWER_USER }}
-          FLOWER_PASSWORD=${{ secrets.FLOWER_PASSWORD }}
-          FLOWER_PORT=${{ secrets.FLOWER_PORT }}
-          FRONTEND_URL=${{ secrets.FRONTEND_URL }}
-          ZAP_PORT=${{ secrets.ZAP_PORT }}
           PHPMYADMIN_HOST_BINDING=${{ secrets.PHPMYADMIN_HOST_BINDING }}
           BACKEND_PORT=${{ secrets.BACKEND_PORT }}
           FRONTEND_PORT=${{ secrets.FRONTEND_PORT }}
-          BACKEND_IMAGE=ghcr.io/${{ github.repository_owner }}/my-backend:latest
-          FRONTEND_IMAGE=ghcr.io/${{ github.repository_owner }}/my-frontend:latest
+          FRONTEND_HTTPS_PORT=${{ secrets.FRONTEND_HTTPS_PORT }}
+          FLOWER_PORT=${{ secrets.FLOWER_PORT }}
+          FLOWER_USER=${{ secrets.FLOWER_USER }}
+          FLOWER_PASSWORD=${{ secrets.FLOWER_PASSWORD }}
+          FRONTEND_URL=${{ secrets.FRONTEND_URL }}
+          ZAP_PORT=${{ secrets.ZAP_PORT }}
+          BACKEND_IMAGE=${{ needs.cosign-verify.outputs.backend_image }}
+          FRONTEND_IMAGE=${{ needs.cosign-verify.outputs.frontend_image }}
           EOF
 
       - name: Rollback to previous version
