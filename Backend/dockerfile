@@ -1,34 +1,26 @@
-# ── Téléchargement Nuclei  ────────────
-FROM alpine AS nuclei-builder
+# ── Téléchargement Nuclei ────────────────────────────────
+FROM alpine:3.19 AS nuclei-builder
 RUN apk add --no-cache curl unzip
-
-#  Télécharge le binaire directement
 RUN curl -L https://github.com/projectdiscovery/nuclei/releases/download/v3.3.9/nuclei_3.3.9_linux_amd64.zip \
     -o nuclei.zip && \
     unzip nuclei.zip && \
     mv nuclei /usr/local/bin/nuclei && \
     chmod +x /usr/local/bin/nuclei
 
-# ── Image finale ──────────────────────────────────────────
-FROM python:3.11-alpine
+# ── Image finale ─────────────────────────────────────────
+FROM python:3.11-alpine3.19
 WORKDIR /app
-
 COPY --from=nuclei-builder /usr/local/bin/nuclei /usr/local/bin/nuclei
 RUN chmod +x /usr/local/bin/nuclei
-
 RUN apk add --no-cache wget curl ca-certificates unzip git
-
 RUN adduser -D celeryuser && \
     mkdir -p /home/celeryuser/nuclei-templates && \
     chown -R celeryuser:celeryuser /home/celeryuser && \
     chown -R celeryuser:celeryuser /app
-
 COPY requirements.txt .
 RUN pip install --no-cache-dir --timeout=300 --retries=5 -r requirements.txt
 RUN pip install --upgrade setuptools wheel
-
 ENV NUCLEI_TEMPLATES_PATH=/home/celeryuser/nuclei-templates
 USER celeryuser
 COPY . .
-
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
