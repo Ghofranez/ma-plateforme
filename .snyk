@@ -1,4 +1,121 @@
-# ══════════════════════════════════════════════════════════
+# .snyk — Fichier de politique Snyk
+version: v1.25.0
+ignore:
+  # ══════════════════════════════════════════════════════════
+  # NUCLEI — OpenTelemetry
+  # ══════════════════════════════════════════════════════════
+  SNYK-GOLANG-GOOPENTELEMETRYIOOTELPROPAGATION-15928420:
+    - '*':
+        reason: CVE dans nuclei (OpenTelemetry) — correction dépend de nuclei upstream
+        expires: 2026-12-31T00:00:00.000Z
+  SNYK-GOLANG-GOOPENTELEMETRYIOOTELINTERNALGLOBAL-15928418:
+    - '*':
+        reason: CVE dans nuclei (OpenTelemetry v1.38.0) — fix v1.41.0, dépend de nuclei upstream
+        expires: 2026-12-31T00:00:00.000Z
+
+  # ══════════════════════════════════════════════════════════
+  # DEBIAN — Non applicable (image Alpine)
+  # ══════════════════════════════════════════════════════════
+  SNYK-DEBIAN13-GNUTLS28-16344302:
+    - '*':
+        reason: CVE Debian 13 — notre image utilise Alpine, non concerné
+        expires: 2026-12-31T00:00:00.000Z
+  SNYK-DEBIAN13-GNUTLS28-16344314:
+    - '*':
+        reason: CVE Debian 13 — notre image utilise Alpine, non concerné
+        expires: 2026-12-31T00:00:00.000Z
+
+  # ══════════════════════════════════════════════════════════
+  # NUCLEI — golang.org/x/net
+  # ══════════════════════════════════════════════════════════
+  SNYK-GOLANG-GOLANGORGXNETHTTP2-16535157:
+    - '*':
+        reason: >
+          CVE dans nuclei (golang.org/x/net/http2 v0.52.0) —
+          correction dépend de nuclei upstream, non exploitable dans notre contexte
+        expires: 2026-12-31T00:00:00.000Z
+  SNYK-GOLANG-GOLANGORGXNETHTTPHTTPPROXY-9058601:
+    - '*':
+        reason: >
+          x/net patchée dans le build,
+          résidu go.sum nuclei — non exploitable
+        expires: 2026-12-31T00:00:00.000Z
+
+  # ══════════════════════════════════════════════════════════
+  # NUCLEI — go-git v5.17.1
+  # ══════════════════════════════════════════════════════════
+  SNYK-GOLANG-GITHUBCOMGOGITGOGITV5PLUMBINGTRANSPORTHTTP-16109639:
+    - '*':
+        reason: >
+          CVE dans nuclei (go-git/v5 transport v5.17.1) — fix v5.18.0
+          correction dépend de nuclei upstream, non exploitable dans notre contexte
+        expires: 2026-12-31T00:00:00.000Z
+  SNYK-GOLANG-GITHUBCOMGOGITGOGITV5PLUMBINGOBJECT-16638689:
+    - '*':
+        reason: >
+          CVE dans nuclei (go-git/v5 object v5.17.1) — fix v5.19.0
+          correction dépend de nuclei upstream, non exploitable dans notre contexte
+        expires: 2026-12-31T00:00:00.000Z
+
+  # ══════════════════════════════════════════════════════════
+  # NUCLEI — mholt/archiver/v3 (bibliothèque abandonnée)
+  # ══════════════════════════════════════════════════════════
+  SNYK-GOLANG-GITHUBCOMMHOLTARCHIVERV3-9689907:
+    - '*':
+        reason: >
+          mholt/archiver/v3 abandonné, pas de fix upstream,
+          utilisé uniquement par nuclei en interne
+        expires: 2026-12-31T00:00:00.000Z
+
+  # ══════════════════════════════════════════════════════════
+  # NUCLEI — golang.org/x/crypto (SSH)
+  # ══════════════════════════════════════════════════════════
+  SNYK-GOLANG-GOLANGORGXCRYPTOSSHKNOWNHOSTS-16796449:
+    - '*':
+        reason: résidu go.sum nuclei — non exploitable
+        expires: 2026-12-31T00:00:00.000Z
+  SNYK-GOLANG-GOLANGORGXCRYPTOSSHAGENT-12668891:
+    - '*':
+        reason: résidu go.sum nuclei — non exploitable
+        expires: 2026-12-31T00:00:00.000Z
+  SNYK-GOLANG-GOLANGORGXCRYPTOSSHAGENT-16796334:
+    - '*':
+        reason: résidu go.sum nuclei — non exploitable
+        expires: 2026-12-31T00:00:00.000Z
+  SNYK-GOLANG-GOLANGORGXCRYPTOSSH-16795342:
+    - '*':
+        reason: résidu go.sum nuclei — non exploitable
+        expires: 2026-12-31T00:00:00.000Z
+  SNYK-GOLANG-GOLANGORGXCRYPTOSSH-16795344:
+    - '*':
+        reason: résidu go.sum nuclei — non exploitable
+        expires: 2026-12-31T00:00:00.000Z
+  SNYK-GOLANG-GOLANGORGXCRYPTOSSH-16796326:
+    - '*':
+        reason: résidu go.sum nuclei — non exploitable
+        expires: 2026-12-31T00:00:00.000Z
+  SNYK-GOLANG-GOLANGORGXCRYPTOSSH-16796332:
+    - '*':
+        reason: résidu go.sum nuclei — non exploitable
+        expires: 2026-12-31T00:00:00.000Z
+  SNYK-GOLANG-GOLANGORGXCRYPTOSSH-8747056:
+    - '*':
+        reason: résidu go.sum nuclei — non exploitable
+        expires: 2026-12-31T00:00:00.000Z
+
+  # ══════════════════════════════════════════════════════════
+  # NUCLEI — aws-sdk-go-v2
+  # ══════════════════════════════════════════════════════════
+  SNYK-GOLANG-GITHUBCOMAWSAWSSDKGOV2SERVICES3-16316411:
+    - '*':
+        reason: résidu go.sum nuclei — non exploitable
+        expires: 2026-12-31T00:00:00.000Z
+  SNYK-GOLANG-GITHUBCOMAWSAWSSDKGOV2AWSPROTOCOLEVENTSTREAM-16316402:
+    - '*':
+        reason: résidu go.sum nuclei — non exploitable
+        expires: 2026-12-31T00:00:00.000Z
+
+  # ══════════════════════════════════════════════════════════
   # NUCLEI — golang-jwt (jwt/v4 et jwt/v5)
   # ══════════════════════════════════════════════════════════
   SNYK-GOLANG-GITHUBCOMGOLANGJWTJWTV5-9510922:
