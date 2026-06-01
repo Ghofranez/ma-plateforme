@@ -24,3 +24,20 @@ CVE-2026-42499
 # mholt/archiver/v3 — bibliothèque abandonnée, aucun fix disponible upstream
 CVE-2026-32285
 CVE-2026-32287
+
+# nuclei binaire — stdlib Go et dépendances, fix dépend upstream nuclei
+CVE-2024-24790
+CVE-2024-34156
+CVE-2025-22869
+CVE-2025-22868
+CVE-2025-30204
+CVE-2025-30153
+CVE-2025-68121
+CVE-2025-61726
+CVE-2025-61729
+CVE-2026-39823
+CVE-2026-39825
+CVE-2026-39826
+
+# buger/jsonparser et antchfx/xpath — liés au binaire nuclei upstream
+CVE-2025-30153
