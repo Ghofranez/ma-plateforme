@@ -1,7 +1,7 @@
 # ── Téléchargement Nuclei ────────────────────────────────
 FROM alpine:3.19 AS nuclei-builder
 RUN apk add --no-cache curl unzip
-RUN curl -L https://github.com/projectdiscovery/nuclei/releases/download/v3.4.4/nuclei_3.4.4_linux_amd64.zip \
+RUN curl -L https://github.com/projectdiscovery/nuclei/releases/download/v3.8.0/nuclei_3.8.0_linux_amd64.zip \
     -o nuclei.zip && \
     unzip nuclei.zip && \
     mv nuclei /usr/local/bin/nuclei && \

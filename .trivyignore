@@ -41,3 +41,6 @@ CVE-2026-39826
 
 # buger/jsonparser et antchfx/xpath — liés au binaire nuclei upstream
 CVE-2025-30153
+
+# stdlib Go 1.24.1 dans nuclei v3.4.4 — fix dépend mise à jour Go upstream nuclei
+CVE-2025-22874
