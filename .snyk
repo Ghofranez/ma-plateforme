@@ -150,3 +150,11 @@ ignore:
           CVE dans nuclei (antchfx/xpath v1.2.4) — fix v1.3.6
           dépend de nuclei upstream, non exploitable dans notre contexte
         expires: 2026-12-31T00:00:00.000Z
+
+
+  SNYK-GOLANG-GOLANGORGXNETIDNA-17116876:
+    - '*':
+        reason: >
+          Vulnérabilité dans le binaire nuclei (dépendance upstream).
+          Fix dépend de nuclei avec golang.org/x/net >= 0.54.0.
+        expires: '2026-09-01T00:00:00.000Z'

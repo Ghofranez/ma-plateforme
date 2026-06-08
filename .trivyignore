@@ -44,3 +44,6 @@ CVE-2025-30153
 
 # stdlib Go 1.24.1 dans nuclei v3.4.4 — fix dépend mise à jour Go upstream nuclei
 CVE-2025-22874
+
+# nuclei binaire — stdlib Go CVE-2026-42504, fix dépend upstream nuclei
+CVE-2026-42504
