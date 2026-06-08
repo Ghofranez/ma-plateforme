@@ -49,11 +49,11 @@ export default function ForgotPassword() {
           </div>
 
           <CardTitle className="text-2xl font-bold text-slate-800">
-            Mot de passe oublié ?
+            Mot de passe oublié
           </CardTitle>
 
           <CardDescription className="text-slate-500">
-            Pas de souci, nous vous enverrons un code de réinitialisation
+            nous vous enverrons un code de réinitialisation
           </CardDescription>
         </CardHeader>
 

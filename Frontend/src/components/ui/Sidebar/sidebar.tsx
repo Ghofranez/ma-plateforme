@@ -154,7 +154,7 @@ export function Sidebar({ isOpen, onClose, onOpen }: SidebarProps) {
           <FingerprintIcon size={17} className="text-indigo-600" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-[13px] font-medium text-gray-800 leading-tight">SecureScan</p>
+          <p className="text-[13px] font-medium text-gray-800 leading-tight">Ma plateforme</p>
           <p className="text-[11px] text-gray-400 leading-tight">Analyse de sécurité</p>
         </div>
         <button

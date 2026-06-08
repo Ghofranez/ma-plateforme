@@ -422,6 +422,74 @@ cosign version
 
 sudo apt install -y curl jq  # jq:Parser le rapport ZAP JSON , curl :Health checks
 
+8- Génerer certificat auto-signer:
+
+sudo mkdir -p /etc/ssl/$nom_du_projet
+
+sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+  -keyout /etc/ssl/$nom_du_projet/privkey.pem \
+  -out /etc/ssl/$nom_du_projet/fullchain.pem \
+  -subj "/CN=ma-plateforme.local" \
+  -addext "subjectAltName=DNS:$nom_du_projet.local,IP:$addr_du_vm"
+
+
+9- Modifier configuration du nginix:
+
+sudo nano /etc/nginx/sites-available/$nom_du_projet
+
+#
+server {
+    listen 80;
+    server_name $nom_du_projet.local;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name $nom_du_projet.local;
+
+    ssl_certificate     /etc/ssl/$nom_du_projet/fullchain.pem;
+    ssl_certificate_key /etc/ssl/$nom_du_projet/privkey.pem;
+
+    # Frontend → port HTTPS du conteneur
+    location / {
+        proxy_pass https://localhost:$port;
+        proxy_ssl_verify off;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+
+    # Backend API
+    location /api/ {
+     rewrite ^/api/(.*) /$1 break;
+     proxy_pass http://localhost:$port;
+     proxy_set_header Host $host;
+     proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    # phpMyAdmin
+    location /pma/ {
+        proxy_pass http://localhost:$port/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    #flower
+    location /flower/ {
+      proxy_pass http://localhost:$port/;
+      proxy_set_header Host $host;
+      proxy_set_header X-Real-IP $remote_addr;
+     }
+}
+
+
+#
+
+10- Recharger nginx:
+
+sudo nginx -t && sudo systemctl reload nginx
+
 Schéma de flux :
 
 git push → CI → CD → Déploiement sur VM → Application en ligne

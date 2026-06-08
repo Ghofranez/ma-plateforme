@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     # Sécurité
     SECRET_KEY: str
     ALGORITHM: str           = "HS256"
-    TOKEN_EXPIRE_MINUTES: int = 60
+    TOKEN_EXPIRE_MINUTES: int = 180
 
     # Email
     SMTP_EMAIL:    str = ""

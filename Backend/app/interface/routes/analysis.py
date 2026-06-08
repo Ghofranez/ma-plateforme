@@ -41,7 +41,7 @@ def analyze_url(
         user_email = current_user.email,
         url        = str(data.url),
         status     = "processing",
-        task_id    = task.id,        
+        task_id    = task.id,
     )
     db.add(db_analysis)
     db.commit()
@@ -140,7 +140,7 @@ def delete_history(
     db:           Session = Depends(get_db),
     current_user: User    = Depends(get_current_user),
 ):
-    return delete_history_item(db, item_id, current_user.email)
+    return delete_history_item(db, item_id, current_user.email,user_id=current_user.id )
 
 
 @router.get("/tasks/en-cours")
