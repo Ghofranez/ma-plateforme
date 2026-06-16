@@ -1028,19 +1028,10 @@ def _build_nuclei_recs(nu: dict, recs: list) -> int:
                  "Nuclei n'est pas installé sur ce serveur. "
                  "Installez-le avec : go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest")
         elif error_type == "timeout":
-            _add(recs, "OK",
-                   "Analyse Nuclei terminée sans vulnérabilité détectée. "
-                   "Le site répond lentement.")
-            nu["status"] = "completed"
-            nu["findings"] = []
-            nu["counts"] = {
-                 "critical": 0,
-                 "high": 0,
-                 "medium": 0,
-                 "low": 0,
-                 "info": 0
-            }
-            nu["total"] = 0
+            _add(recs, "Info",
+                 "L'analyse Nuclei n'a pas pu se terminer dans le délai imparti — "
+                 "le site répond trop lentement. Les résultats ne sont donc pas garantis à 100%. "
+                 "Action : relancez l'analyse plus tard, ou augmentez le délai d'analyse autorisé.")
         elif error_type == "invalid_url":
             _add(recs, "Erreur", "URL invalide pour l'analyse Nuclei.")
         elif error_type == "templates_missing":
@@ -1058,9 +1049,18 @@ def _build_nuclei_recs(nu: dict, recs: list) -> int:
     findings = nu.get("findings", [])
     counts   = nu.get("counts",   {})
     total    = nu.get("total",    0)
+    partial  = nu.get("partial",  False)
+
+    if partial:
+        _add(recs, "Info",
+             "L'analyse Nuclei n'a pas pu tester tous les modèles dans le délai imparti — "
+             "les résultats ci-dessous sont donc partiels, pas une garantie totale d'absence de faille.")
 
     if total == 0:
-        _add(recs, "OK", "Nuclei n'a détecté aucune vulnérabilité connue sur ce site.")
+        if partial:
+            _add(recs, "Info", "Aucune vulnérabilité détectée sur les tests effectués avant l'interruption.")
+        else:
+            _add(recs, "OK", "Nuclei n'a détecté aucune vulnérabilité connue sur ce site.")
         return risk
 
     critical = counts.get("critical", 0)
@@ -1191,8 +1191,8 @@ def _build_summary(risk_score: int, recommendations: dict) -> str:
 
 @celery_app.task(
     bind=True,
-    soft_time_limit=800,
-    time_limit=860,
+    soft_time_limit=1500,
+    time_limit=1600,
     max_retries=1,
 )
 def scan_url_task(self, url: str, user_id: int, user_email: str):
@@ -1206,12 +1206,22 @@ def scan_url_task(self, url: str, user_id: int, user_email: str):
         ("shodan",        "Exposition serveur Shodan",       lambda: _safe_scan(scan_shodan_internetdb, url, timeout=30)),
         ("wappalyzer",    "Stack technologique Wappalyzer",  lambda: _safe_scan(scan_wappalyzer,        url, timeout=60)),
         ("zap",           "Vulnérabilités OWASP ZAP",        lambda: _safe_scan(scan_zap,               url, timeout=180)),
-        ("nuclei",        "Vulnérabilités Nuclei",           lambda: _safe_scan(scan_nuclei,            url, timeout=360)),
+        ("nuclei",        "Vulnérabilités Nuclei",           lambda: _safe_scan(scan_nuclei,            url, timeout=480)),
     ]
 
-    partial_results = {}
-    raw_results     = {}
-    total_outils    = len(OUTILS)
+    raw_results  = {}
+    total_outils = len(OUTILS)
+
+    # Tous les outils initialisés en "pending" dès le départ
+    partial_results = {
+        key: {
+            "label":  SECTION_LABELS.get(key, key),
+            "status": "pending",
+            "detail": "En attente...",
+            "raw":    {},
+        }
+        for key, label, _ in OUTILS
+    }
 
     self.update_state(
         state="PROGRESS",
@@ -1220,31 +1230,54 @@ def scan_url_task(self, url: str, user_id: int, user_email: str):
             "progress":        5,
             "current_tool":    None,
             "current_label":   None,
-            "partial_results": {},
+            "partial_results": partial_results,
         }
     )
 
-    for i, (key, label, fn) in enumerate(OUTILS):
-        self.update_state(
-            state="PROGRESS",
-            meta={
-                "status":          f"Analyse en cours : {label}...",
-                "progress":        int(10 + (i / total_outils) * 75),
-                "current_tool":    key,
-                "current_label":   label,
-                "partial_results": partial_results,
+    # Lancement parallèle
+    completed_count = 0
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=total_outils) as executor:
+            future_to_info = {
+                executor.submit(fn): (key, label)
+                for key, label, fn in OUTILS
             }
-        )
-        try:
-            raw = fn()
-        except SoftTimeLimitExceeded:
-            raise
-        except Exception as exc:
-            raw = {"status": "failed", "error": str(exc)}
 
-        raw_results[key]     = raw
-        partial_results[key] = _summarize_tool_result(key, raw)
+            for future in concurrent.futures.as_completed(future_to_info, timeout=1450):
+                key, label = future_to_info[future]
+                completed_count += 1
 
+                try:
+                    raw = future.result()
+                except SoftTimeLimitExceeded:
+                    raise
+                except Exception as exc:
+                    raw = {"status": "failed", "error": str(exc)}
+
+                raw_results[key]     = raw
+                partial_results[key] = _summarize_tool_result(key, raw)
+
+                self.update_state(
+                    state="PROGRESS",
+                    meta={
+                        "status":          f"Analyse en cours ({completed_count}/{total_outils} terminés)...",
+                        "progress":        int(10 + (completed_count / total_outils) * 75),
+                        "current_tool":    key,
+                        "current_label":   label,
+                        "partial_results": partial_results,
+                    }
+                )
+
+    except concurrent.futures.TimeoutError:
+        for key, label, _ in OUTILS:
+            if key not in raw_results:
+                raw_results[key]     = {"status": "failed", "error": "timeout global", "error_type": "timeout"}
+                partial_results[key] = _summarize_tool_result(key, raw_results[key])
+
+    except SoftTimeLimitExceeded:
+        raise
+
+    # Calcul du score
     self.update_state(
         state="PROGRESS",
         meta={
@@ -1267,6 +1300,7 @@ def scan_url_task(self, url: str, user_id: int, user_email: str):
         "display":         display_report,
     }
 
+    # Sauvegarde
     self.update_state(
         state="PROGRESS",
         meta={
@@ -1285,7 +1319,6 @@ def scan_url_task(self, url: str, user_id: int, user_email: str):
         ).first()
 
         if existing:
-
             existing.status          = "completed"
             existing.full_report     = full_report
             existing.summary         = {
@@ -1298,7 +1331,6 @@ def scan_url_task(self, url: str, user_id: int, user_email: str):
             existing.recommendations = "\n".join(all_recs_flat)
             db.commit()
         else:
-            # Fallback : créer si introuvable
             repo = AnalysisRepository(db)
             repo.create_full(
                 user_id         = user_id,

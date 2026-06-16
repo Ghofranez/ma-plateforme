@@ -16,6 +16,7 @@ interface UserItem {
   prenom: string;
   email: string;
   telephone: string;
+  role:     string;
 }
 
 export default function AdminUsers() {
@@ -95,7 +96,7 @@ export default function AdminUsers() {
               <div
                 key={index}
                 className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all overflow-hidden"
-                style={{ borderLeft: "4px solid #6366f1" }}
+                style={{ borderLeft: `4px solid ${user.role === "admin" ? "#f59e0b" : "#6366f1"}` }}
               >
                 <div className="p-4">
                   <div className="flex items-start gap-3">
@@ -122,10 +123,16 @@ export default function AdminUsers() {
                       </div>
                     </div>
 
-                    {/* Badge */}
-                    <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-600 shrink-0">
-                      Utilisateur
-                    </span>
+                    {/* Badge dynamique selon le rôle */}
+                     <span
+                        className={`text-[10px] font-bold px-2.5 py-1 rounded-full shrink-0 ${
+                        user.role === "admin"
+                        ? "bg-amber-50 border border-amber-200 text-amber-600"
+                        : "bg-indigo-50 border border-indigo-200 text-indigo-600"
+                        }`}
+                         >
+                       {user.role === "admin" ? "Admin" : "Utilisateur"}
+                     </span>
 
                   </div>
                 </div>

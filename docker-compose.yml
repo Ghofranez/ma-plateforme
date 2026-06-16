@@ -60,6 +60,9 @@ services:
     build: ./Backend
     image: my-backend:latest
     restart: always
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/"]
       interval: 30s
@@ -80,6 +83,7 @@ services:
       ZAP_API_KEY:              ${ZAP_API_KEY}
       ZAP_BASE_URL:             http://zap:8090
       FRONTEND_URL:             ${FRONTEND_URL}
+      DEV_SECRET:               ${DEV_SECRET}
     networks:
       - internal
       - external
@@ -223,6 +227,9 @@ services:
   zap:
     image: zaproxy/zap-stable
     container_name: zap
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     command: >-
       zap.sh -daemon
       -host 0.0.0.0
@@ -241,6 +248,7 @@ services:
       - "${ZAP_PORT}:8090"
     networks:
       - internal
+      - external
     restart: unless-stopped
     tmpfs:
       - /zap/wrk:rw

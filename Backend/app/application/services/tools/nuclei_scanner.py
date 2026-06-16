@@ -380,8 +380,8 @@ def scan_nuclei(url: str) -> dict:
     profile      = PROFILES[profile_name]
 
     all_findings = []
+    timed_out = False
 
-    # ── 2. Phase unique — profil adapté au site ──────────────────────────────
     proc = None
     try:
         logger.info(
@@ -401,22 +401,24 @@ def scan_nuclei(url: str) -> dict:
         logger.info("[Nuclei] Terminé — returncode: %d", proc.returncode)
         all_findings += _parse_nuclei_output(proc.stdout.splitlines())
 
-    except subprocess.TimeoutExpired:
-        
+    except subprocess.TimeoutExpired as exc:
+        timed_out = True
         logger.warning(
-            "[Nuclei] Timeout (%ds) — résultats partiels retournés",
+            "[Nuclei] Timeout (%ds) — récupération des résultats partiels...",
             profile["phase_timeout"]
         )
-        if proc is not None:
-            try:
-                all_findings += _parse_nuclei_output(proc.stdout.splitlines())
-            except Exception:
-                pass
+        partial_stdout = exc.stdout or ""
+        if isinstance(partial_stdout, bytes):
+            partial_stdout = partial_stdout.decode(errors="ignore")
+        try:
+            all_findings += _parse_nuclei_output(partial_stdout.splitlines())
+        except Exception:
+            pass
 
     except Exception as exc:
         logger.exception("[Nuclei] Erreur inattendue : %s", exc)
 
-    # ── 3. Déduplication ─────────────────────────────────────────────────────
+    # ── 3. Déduplication ─────────────────────────────────────────────────
     seen, deduped = set(), []
     for f in all_findings:
         key = (f.get("template_id"), f.get("matched_at"))
@@ -428,15 +430,16 @@ def scan_nuclei(url: str) -> dict:
     total  = len(deduped)
 
     logger.info(
-        "[Nuclei] Terminé — profil=%s latence=%.2fs — "
+        "[Nuclei] Terminé — profil=%s latence_probe=%.2fs partiel=%s — "
         "%d finding(s) : critical=%d high=%d medium=%d low=%d info=%d",
-        profile_name, probe["latency"], total,
+        profile_name, probe["latency"], timed_out, total,
         counts["critical"], counts["high"],
         counts["medium"], counts["low"], counts["info"],
     )
 
     return {
         "status":   "completed",
+        "partial":  timed_out,
         "findings": deduped,
         "counts":   counts,
         "total":    total,

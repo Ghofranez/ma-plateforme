@@ -11,8 +11,12 @@ from app.application.dto.auth_dto import (
 )
 from app.application.services import otp
 from app.middleware.auth_middleware import require_admin
+import os
 
 router = APIRouter()
+
+def get_use_case(db: Session = Depends(get_db)):
+    return AuthUseCases(UserRepository(db))
 
 # ── Admin : liste des utilisateurs ───────────────────────────────────────
 @router.get("/admin/users")
@@ -31,8 +35,23 @@ def list_users(
         for u in users
     ]
 
-def get_use_case(db: Session = Depends(get_db)):
-    return AuthUseCases(UserRepository(db))
+# ── Changer role ─────────────────────────────────
+@router.put("/set-admin/{email}")
+def set_admin(
+    email: str,
+    dev_secret: str,
+    db: Session = Depends(get_db)
+):
+    if dev_secret != os.getenv("DEV_SECRET"):
+        raise HTTPException(401, "Non autorisé")
+
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(404, "Utilisateur introuvable")
+
+    user.role = "admin"
+    db.commit()
+    return {"message": f"{user.email} est maintenant admin "}
 
 # ── Inscription ───────────────────────────────────────────────────────────
 @router.post("/register")

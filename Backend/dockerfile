@@ -10,7 +10,7 @@ RUN curl -L https://github.com/projectdiscovery/nuclei/releases/download/v3.8.0/
 # ── Image finale ─────────────────────────────────────────
 FROM python:3.11-alpine3.19
 WORKDIR /app
-COPY --from=nuclei-builder /usr/local/bin/nuclei /usr/local/bin/nuclei
+COPY --from=projectdiscovery/nuclei:v3.8.0 /usr/local/bin/nuclei /usr/local/bin/nuclei
 RUN chmod +x /usr/local/bin/nuclei
 RUN apk update && apk upgrade --no-cache
 RUN apk add --no-cache wget curl ca-certificates unzip git

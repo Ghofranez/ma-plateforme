@@ -282,6 +282,15 @@ def detect_anomalies(old_data: dict, new_data: dict) -> list[dict]:
     # ── Nuclei ────────────────────────────────────────────────────────────
     old_nuclei     = old_data.get("nuclei", {})
     new_nuclei     = new_data.get("nuclei", {})
+
+    if new_nuclei.get("partial"):
+        anomalies.append({
+            "type":     "NUCLEI_PARTIAL",
+            "severity": "MEDIUM",
+            "message":  "Le scan Nuclei n'a pas pu se terminer entièrement dans le délai imparti — "
+                        "les résultats de cette vérification sont incomplets.",
+        })
+
     old_counts_n   = old_nuclei.get("counts") or {}
     new_counts_n   = new_nuclei.get("counts") or {}
     old_critical_n = old_counts_n.get("critical", 0)

@@ -1,6 +1,5 @@
 """
 scanner.py — Pipeline de scan de sécurité parallèle
-
 """
 
 import concurrent.futures
@@ -14,18 +13,11 @@ from app.application.services.tools.safe_browsing    import scan_safe_browsing
 from app.application.services.tools.urlscan          import scan_urlscan
 from app.application.services.tools.shodan           import scan_shodan_internetdb
 from app.application.services.tools.wappalyzer       import scan_wappalyzer
-from app.application.services.tools.zap_scanner import run_zap_scan
-from app.application.services.tools.nuclei_scanner import scan_nuclei
+from app.application.services.tools.zap_scanner      import run_zap_scan
+from app.application.services.tools.nuclei_scanner   import scan_nuclei
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Utilitaires internes
-# ─────────────────────────────────────────────────────────────────────────────
 
 def _resolve_ip(url: str) -> str | None:
-    """
-    Résout l'adresse IP de l'hôte contenu dans l'URL.
-    """
     try:
         from urllib.parse import urlparse
         hostname = urlparse(url).hostname
@@ -35,29 +27,16 @@ def _resolve_ip(url: str) -> str | None:
 
 
 def _safe_run(fn, *args):
-    """
-    Encapsule un appel de scanner pour garantir qu'aucune exception
-    """
     try:
         return fn(*args)
     except Exception as exc:
         return {"status": "failed", "error": str(exc)}
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Analyse SSL avec fallback automatique
-# ─────────────────────────────────────────────────────────────────────────────
-
-# Types d'erreurs pour lesquels le fallback n'apporterait aucune valeur ajoutée
-
 _NO_FALLBACK_ERROR_TYPES = {"rate_limit", "timeout", "network"}
 
 
 def _scan_ssl_with_fallback(url: str) -> dict:
-    
-    #Tente d'abord une analyse SSL via SSL Labs.
-    #en cas d'erruer bascule automatiquement vers testssl.sh / Python natif.
-
     result = _safe_run(scan_ssl, url)
 
     if result.get("status") == "completed":
@@ -65,26 +44,20 @@ def _scan_ssl_with_fallback(url: str) -> dict:
         result["fallback_used"] = False
         return result
 
-    # Pas de fallback pour les erreurs où une seconde tentative n'aiderait pas
     if result.get("error_type", "") in _NO_FALLBACK_ERROR_TYPES:
         result.setdefault("_source", "ssllabs")
         result["fallback_used"] = False
         return result
 
-    # Fallback vers l'analyseur alternatif
     fallback = _safe_run(scan_testssl, url)
     fallback["_source"]       = "python_ssl"
     fallback["fallback_used"] = True
     return fallback
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Scan complet — tous les outils lancés en parallèle
-# ─────────────────────────────────────────────────────────────────────────────
-
 def run_full_scan(url: str) -> dict:
-    ip = _resolve_ip(url)
-    report: dict = {"url": url, "status": "completed"}
+    ip     = _resolve_ip(url)
+    report = {"url": url, "status": "completed"}
 
     tasks = [
         ("headers",       scan_headers,          url),
@@ -97,12 +70,23 @@ def run_full_scan(url: str) -> dict:
         ("nuclei",        scan_nuclei,            url),
     ]
 
+    # Timeouts individuels par outil
+    TIMEOUTS = {
+        "headers":       30,
+        "virustotal":    60,
+        "safe_browsing": 30,
+        "urlscan":       90,
+        "shodan":        30,
+        "wappalyzer":    60,
+        "zap":           180,
+        "nuclei":        420,
+        "ssl":           300,
+    }
 
     executor = concurrent.futures.ThreadPoolExecutor(max_workers=len(tasks) + 1)
     try:
-        ssl_future = executor.submit(_scan_ssl_with_fallback, url)
-
-        future_to_key: dict = {
+        ssl_future     = executor.submit(_scan_ssl_with_fallback, url)
+        future_to_key  = {
             executor.submit(_safe_run, fn, *args): key
             for key, fn, *args in tasks
         }
@@ -111,7 +95,7 @@ def run_full_scan(url: str) -> dict:
         completed_futures = set()
         try:
             for future in concurrent.futures.as_completed(
-                future_to_key, timeout=560
+                future_to_key, timeout=600
             ):
                 key = future_to_key[future]
                 completed_futures.add(future)
@@ -132,12 +116,11 @@ def run_full_scan(url: str) -> dict:
                         report[key] = {
                             "status":     "failed",
                             "error_type": "timeout",
-                            "error":      f"Scanner '{key}' a dépassé le délai de 360s",
+                            "error":      f"Scanner '{key}' a dépassé le délai",
                         }
                         future.cancel()
 
     finally:
-
         executor.shutdown(wait=False, cancel_futures=True)
 
     return report

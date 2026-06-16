@@ -124,6 +124,8 @@ function StatCard({ icon, label, value, sub, color, bg }: {
 
 // ─── ToolProgressList ─────────────────────────────────────────────
 
+// ─── ToolProgressList corrigé pour la parallélisation ─────────────
+
 const TOOL_ORDER = [
   "headers", "ssl", "virustotal", "safe_browsing",
   "urlscan", "shodan", "wappalyzer", "zap", "nuclei",
@@ -132,8 +134,10 @@ const TOOL_ORDER = [
 const STATUS_ICON: Record<string, React.ReactNode> = {
   danger:    <XCircle      size={12} className="text-red-500 shrink-0"    />,
   warning:   <AlertCircle  size={12} className="text-orange-400 shrink-0" />,
+  ok:        <CheckCircle2 size={12} className="text-green-500 shrink-0"  />,
   failed:    <MinusCircle  size={12} className="text-gray-400 shrink-0"   />,
   completed: <CheckCircle2 size={12} className="text-green-500 shrink-0"  />,
+  pending:   <MinusCircle  size={12} className="text-gray-300 shrink-0"   />,
 };
 
 function ToolProgressList({ partialResults, currentTool, progress }: {
@@ -142,36 +146,50 @@ function ToolProgressList({ partialResults, currentTool, progress }: {
   progress?: number;
 }) {
   if (!partialResults && !currentTool) return null;
-  const doneKeys = partialResults ? Object.keys(partialResults) : [];
+
   return (
     <div className="mt-2 space-y-1">
       {TOOL_ORDER.map((key) => {
         const tool = partialResults?.[key];
-        const isCurrent = currentTool === key && !tool;
-        if (!tool && !isCurrent) return null;
-        const icon = tool
-          ? (STATUS_ICON[tool.status] ?? STATUS_ICON["completed"])
-          : <Loader2 size={12} className="text-indigo-400 animate-spin shrink-0" />;
+
+        // Outil pas encore connu → skip si pas de partial_results du tout
+        if (!tool && !partialResults) return null;
+
+        // Outil en attente (pending initialisé côté backend)
+        const isPending  = tool?.status === "pending";
+        // Outil en cours (c'est le dernier complété, les autres pending tournent en parallèle)
+        const isRunning  = !tool || isPending;
+
+        const icon = isRunning
+          ? <Loader2 size={12} className="text-indigo-400 animate-spin shrink-0" />
+          : (STATUS_ICON[tool.status] ?? STATUS_ICON["completed"]);
+
+        const label  = tool?.label  ?? key;
+        const detail = tool?.detail ?? (isPending ? "En cours..." : "");
+
         return (
-          <div key={key} className="flex items-center gap-1.5 text-[10px]">
+          <div
+            key={key}
+            className={`flex items-center gap-1.5 text-[10px] transition-opacity ${
+              isRunning ? "opacity-60" : "opacity-100"
+            }`}
+          >
             {icon}
-            <span className="font-semibold text-gray-600 truncate" style={{ maxWidth: 120 }}>
-              {tool?.label ?? key}
+            <span className={`font-semibold truncate ${
+              isRunning ? "text-indigo-400" : "text-gray-600"
+            }`} style={{ maxWidth: 120 }}>
+              {label}
             </span>
-            {tool?.detail && (
+            {detail && !isRunning && (
               <span className="text-gray-400 truncate" style={{ maxWidth: 140 }}>
-                {tool.detail}
+                {detail}
               </span>
             )}
           </div>
         );
       })}
-      {currentTool && !doneKeys.includes(currentTool) && (
-        <div className="flex items-center gap-1.5 text-[10px]">
-          <Loader2 size={12} className="text-indigo-400 animate-spin shrink-0" />
-          <span className="text-indigo-500 font-semibold">{currentTool}…</span>
-        </div>
-      )}
+
+      {/* Barre de progression */}
       {progress != null && (
         <div className="mt-1.5 w-full bg-slate-100 rounded-full h-1">
           <motion.div
@@ -180,6 +198,14 @@ function ToolProgressList({ partialResults, currentTool, progress }: {
             transition={{ duration: 0.6, ease: "easeOut" }}
           />
         </div>
+      )}
+
+      {/* Compteur outils terminés */}
+      {partialResults && (
+        <p className="text-[9px] text-gray-400 mt-1">
+          {Object.values(partialResults).filter(t => t.status !== "pending").length}
+          /{TOOL_ORDER.length} outils terminés
+        </p>
       )}
     </div>
   );
@@ -239,7 +265,7 @@ export default function Home() {
   );
   const hasActiveScan  = activeRunning.length > 0;
   const runningCount   = activeRunning.length;
-  const isInputBlocked = hasActiveScan; 
+  const isInputBlocked = hasActiveScan;
 
   // ─── loadAll ──────────────────────────────────────────────────
   const loadAll = useCallback(async () => {
@@ -518,18 +544,26 @@ export default function Home() {
                         {item.url}
                       </p>
                       {item._isActive && (
-                        <div className="mt-1">
-                          <span className="text-[10px] font-medium text-indigo-500 flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse inline-block" />
-                            {item._scan?.meta?.status || "En attente…"}
-                          </span>
-                          <ToolProgressList
-                            partialResults={item._scan?.meta?.partial_results}
-                            currentTool={item._scan?.meta?.current_tool}
-                            progress={item._scan?.progress}
-                          />
-                        </div>
-                      )}
+                       <div className="mt-1">
+                       <span className="text-[10px] font-medium text-indigo-500 flex items-center gap-1">
+                       <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse inline-block" />
+                         {item._scan?.meta?.status || "Démarrage..."}
+                       </span>
+
+                       {/* Progression globale */}
+                        {item._scan?.progress != null && (
+                        <span className="text-[9px] text-gray-400 ml-3">
+                        {item._scan.progress}%
+                        </span>
+                        )}
+
+                     <ToolProgressList
+                      partialResults={item._scan?.meta?.partial_results}
+                      currentTool={item._scan?.meta?.current_tool}
+                      progress={item._scan?.progress}
+                     />
+                    </div>
+                     )}
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0 mt-1">
