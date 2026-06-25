@@ -8,7 +8,7 @@ RUN curl -L https://github.com/projectdiscovery/nuclei/releases/download/v3.8.0/
     chmod +x /usr/local/bin/nuclei
 
 # ── Image finale ─────────────────────────────────────────
-FROM python:3.11-alpine3.19
+FROM python:3.11-alpine3.21
 WORKDIR /app
 COPY --from=projectdiscovery/nuclei:v3.8.0 /usr/local/bin/nuclei /usr/local/bin/nuclei
 RUN chmod +x /usr/local/bin/nuclei

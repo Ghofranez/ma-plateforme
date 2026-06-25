@@ -47,3 +47,24 @@ CVE-2025-22874
 
 # nuclei binaire — stdlib Go CVE-2026-42504, fix dépend upstream nuclei
 CVE-2026-42504
+
+# nuclei binaire — golang.org/x/crypto v0.49.0, fix dépend upstream nuclei
+CVE-2026-39827
+CVE-2026-39828
+CVE-2026-39829
+CVE-2026-39830
+CVE-2026-39835
+CVE-2026-42508
+CVE-2026-46595
+CVE-2026-46597
+
+# nuclei binaire — golang.org/x/net v0.52.0, fix dépend upstream nuclei
+CVE-2026-25680
+CVE-2026-25681
+CVE-2026-27136
+CVE-2026-39821
+CVE-2026-42502
+CVE-2026-42506
+
+# nuclei binaire — stdlib Go v1.26.2, fix dépend upstream nuclei
+CVE-2026-27145
