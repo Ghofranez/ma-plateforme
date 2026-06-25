@@ -21,35 +21,28 @@ jobs:
     runs-on: self-hosted
     steps:
       - name: Send Email — CI Failed
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: smtp.gmail.com
-          server_port: 465
-          secure: true
-          username: ${{ secrets.SMTP_EMAIL }}
-          password: ${{ secrets.SMTP_PASSWORD }}
-          subject: "[CI ÉCHOUÉ] — Déploiement annulé | ${{ github.event.workflow_run.head_branch }}"
-          to: ${{ secrets.NOTIFY_EMAIL }}
-          from: "GitHub Actions <${{ secrets.SMTP_EMAIL }}>"
-          html_body: |
-            <h2 style="color:#cc0000;"> CI Pipeline Échoué</h2>
-            <p>Le déploiement a été <strong>annulé</strong> car le CI n'a pas passé.</p>
-            <table style="border-collapse:collapse; width:100%;">
-              <tr><td style="padding:8px; background:#f5f5f5;"><strong>Workflow</strong></td>
-                  <td style="padding:8px;">${{ github.event.workflow_run.name }}</td></tr>
-              <tr><td style="padding:8px; background:#f5f5f5;"><strong>Branche</strong></td>
-                  <td style="padding:8px;">${{ github.event.workflow_run.head_branch }}</td></tr>
-              <tr><td style="padding:8px; background:#f5f5f5;"><strong>Commit</strong></td>
-                  <td style="padding:8px;">${{ github.event.workflow_run.head_sha }}</td></tr>
-              <tr><td style="padding:8px; background:#f5f5f5;"><strong>Déclenché par</strong></td>
-                  <td style="padding:8px;">${{ github.event.workflow_run.triggering_actor.login }}</td></tr>
-            </table>
-            <br>
-            <a href="${{ github.event.workflow_run.html_url }}"
-               style="background:#cc0000; color:white; padding:10px 20px;
-                      text-decoration:none; border-radius:4px;">
-              Voir les logs CI
-            </a>
+        run: |
+          curl --ssl-reqd \
+            --url 'smtps://smtp.gmail.com:465' \
+            --user '${{ secrets.SMTP_EMAIL }}:${{ secrets.SMTP_PASSWORD }}' \
+            --mail-from '${{ secrets.SMTP_EMAIL }}' \
+            --mail-rcpt '${{ secrets.NOTIFY_EMAIL }}' \
+            --upload-file - << 'EOF'
+          From: GitHub Actions <${{ secrets.SMTP_EMAIL }}>
+          To: ${{ secrets.NOTIFY_EMAIL }}
+          Subject: [CI ECHOUE] — Deploiement annule | ${{ github.event.workflow_run.head_branch }}
+          Content-Type: text/plain; charset=utf-8
+
+          CI Pipeline Echoue
+          Le deploiement a ete annule car le CI n'a pas passe.
+
+          Workflow   : ${{ github.event.workflow_run.name }}
+          Branche    : ${{ github.event.workflow_run.head_branch }}
+          Commit     : ${{ github.event.workflow_run.head_sha }}
+          Declenche  : ${{ github.event.workflow_run.triggering_actor.login }}
+
+          Voir les logs : ${{ github.event.workflow_run.html_url }}
+          EOF
 
   ########################################################
   # JOB 1 — VERIFICATION SIGNATURE COSIGN
@@ -63,7 +56,12 @@ jobs:
       frontend_image: ${{ steps.set-images.outputs.frontend }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          cd "$GITHUB_WORKSPACE"
+          git fetch origin
+          git checkout ${{ github.event.workflow_run.head_sha }} 2>/dev/null || \
+          git checkout ${{ github.event.workflow_run.head_branch }} 2>/dev/null || true
 
       - name: Set image names
         id: set-images
@@ -83,7 +81,7 @@ jobs:
         run: |
           echo "$COSIGN_PUBLIC_KEY" > cosign.pub
           cosign verify --key cosign.pub ${{ steps.set-images.outputs.backend }}
-          echo "Image backend vérifiée ✓"
+          echo "Image backend verifiee ✓"
 
       - name: Verify Frontend Image
         env:
@@ -91,7 +89,7 @@ jobs:
         run: |
           echo "$COSIGN_PUBLIC_KEY" > cosign.pub
           cosign verify --key cosign.pub ${{ steps.set-images.outputs.frontend }}
-          echo "Image frontend vérifiée ✓"
+          echo "Image frontend verifiee ✓"
 
   ########################################################
   # JOB 2 — DEPLOIEMENT
@@ -106,7 +104,12 @@ jobs:
       prev_frontend: ${{ steps.save-sha.outputs.prev_frontend }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          cd "$GITHUB_WORKSPACE"
+          git fetch origin
+          git checkout ${{ github.event.workflow_run.head_sha }} 2>/dev/null || \
+          git checkout ${{ github.event.workflow_run.head_branch }} 2>/dev/null || true
 
       - name: Save previous SHA for rollback
         id: save-sha
@@ -119,39 +122,39 @@ jobs:
             --format='{{index .RepoDigests 0}}' 2>/dev/null || echo "")
           echo "prev_backend=${PREV_BACKEND}"   >> $GITHUB_OUTPUT
           echo "prev_frontend=${PREV_FRONTEND}" >> $GITHUB_OUTPUT
-          echo "Version précédente sauvegardée"
+          echo "Version precedente sauvegardee"
 
       - name: Create .env file
         run: |
-         cat > .env << 'EOF'
-         MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }}
-         MYSQL_DATABASE=${{ secrets.MYSQL_DATABASE }}
-         MYSQL_USER=${{ secrets.MYSQL_USER }}
-         MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }}
-         DATABASE_URL=${{ secrets.DATABASE_URL }}
-         SECRET_KEY=${{ secrets.SECRET_KEY }}
-         SMTP_EMAIL=${{ secrets.SMTP_EMAIL }}
-         SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}
-         REDIS_URL=${{ secrets.REDIS_URL }}
-         VIRUSTOTAL_KEY=${{ secrets.VIRUSTOTAL_KEY }}
-         GOOGLE_SAFE_BROWSING_KEY=${{ secrets.GOOGLE_SAFE_BROWSING_KEY }}
-         URLSCAN_API_KEY=${{ secrets.URLSCAN_API_KEY }}
-         ZAP_API_KEY=${{ secrets.ZAP_API_KEY }}
-         ZAP_BASE_URL=http://zap:8090
-         OPENPHISH_ENABLED=true
-         PHPMYADMIN_HOST_BINDING=${{ secrets.PHPMYADMIN_HOST_BINDING }}
-         BACKEND_PORT=${{ secrets.BACKEND_PORT }}
-         FRONTEND_PORT=${{ secrets.FRONTEND_PORT }}
-         FRONTEND_HTTPS_PORT=${{ secrets.FRONTEND_HTTPS_PORT }}
-         FLOWER_PORT=${{ secrets.FLOWER_PORT }}
-         FLOWER_USER=${{ secrets.FLOWER_USER }}
-         FLOWER_PASSWORD=${{ secrets.FLOWER_PASSWORD }}
-         FRONTEND_URL=${{ secrets.FRONTEND_URL }}
-         ZAP_PORT=${{ secrets.ZAP_PORT }}
-         BACKEND_IMAGE=${{ needs.cosign-verify.outputs.backend_image }}
-         FRONTEND_IMAGE=${{ needs.cosign-verify.outputs.frontend_image }}
-         EOF
-          echo "=== .env créé (clés masquées) ==="
+          cat > .env << 'EOF'
+          MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }}
+          MYSQL_DATABASE=${{ secrets.MYSQL_DATABASE }}
+          MYSQL_USER=${{ secrets.MYSQL_USER }}
+          MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }}
+          DATABASE_URL=${{ secrets.DATABASE_URL }}
+          SECRET_KEY=${{ secrets.SECRET_KEY }}
+          SMTP_EMAIL=${{ secrets.SMTP_EMAIL }}
+          SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}
+          REDIS_URL=${{ secrets.REDIS_URL }}
+          VIRUSTOTAL_KEY=${{ secrets.VIRUSTOTAL_KEY }}
+          GOOGLE_SAFE_BROWSING_KEY=${{ secrets.GOOGLE_SAFE_BROWSING_KEY }}
+          URLSCAN_API_KEY=${{ secrets.URLSCAN_API_KEY }}
+          ZAP_API_KEY=${{ secrets.ZAP_API_KEY }}
+          ZAP_BASE_URL=http://zap:8090
+          OPENPHISH_ENABLED=true
+          PHPMYADMIN_HOST_BINDING=${{ secrets.PHPMYADMIN_HOST_BINDING }}
+          BACKEND_PORT=${{ secrets.BACKEND_PORT }}
+          FRONTEND_PORT=${{ secrets.FRONTEND_PORT }}
+          FRONTEND_HTTPS_PORT=${{ secrets.FRONTEND_HTTPS_PORT }}
+          FLOWER_PORT=${{ secrets.FLOWER_PORT }}
+          FLOWER_USER=${{ secrets.FLOWER_USER }}
+          FLOWER_PASSWORD=${{ secrets.FLOWER_PASSWORD }}
+          FRONTEND_URL=${{ secrets.FRONTEND_URL }}
+          ZAP_PORT=${{ secrets.ZAP_PORT }}
+          BACKEND_IMAGE=${{ needs.cosign-verify.outputs.backend_image }}
+          FRONTEND_IMAGE=${{ needs.cosign-verify.outputs.frontend_image }}
+          EOF
+          echo "=== .env cree (cles masquees) ==="
           cat .env | sed 's/=.*/=***/'
 
       - name: Login GHCR
@@ -166,10 +169,10 @@ jobs:
 
       - name: Deploy with Docker Compose
         run: |
-          echo "=== DÉBUT DU DÉPLOIEMENT ==="
+          echo "=== DEBUT DU DEPLOIEMENT ==="
           docker compose -f docker-compose.prod.yml down
           docker compose -f docker-compose.prod.yml up -d
-          echo "=== DÉPLOIEMENT TERMINÉ ==="
+          echo "=== DEPLOIEMENT TERMINE ==="
 
       - name: Debug — logs backend
         run: |
@@ -177,10 +180,10 @@ jobs:
           docker ps -a
           echo "=== LOGS BACKEND ==="
           BACKEND_ID=$(docker ps -a --filter "name=backend" -q | head -1)
-          [ -n "$BACKEND_ID" ] && docker logs "$BACKEND_ID" --tail 50 || echo "Pas de conteneur backend trouvé"
+          [ -n "$BACKEND_ID" ] && docker logs "$BACKEND_ID" --tail 50 || echo "Pas de conteneur backend trouve"
           echo "=== LOGS DB ==="
           DB_ID=$(docker ps -a --filter "name=db" -q | head -1)
-          [ -n "$DB_ID" ] && docker logs "$DB_ID" --tail 20 || echo "Pas de conteneur db trouvé"
+          [ -n "$DB_ID" ] && docker logs "$DB_ID" --tail 20 || echo "Pas de conteneur db trouve"
 
   ########################################################
   # JOB 3 — HEALTH CHECK
@@ -195,38 +198,38 @@ jobs:
         run: |
           for i in {1..15}; do
             if curl -sf http://localhost:8000/; then
-              echo "Backend opérationnel ✓"
+              echo "Backend operationnel ✓"
               exit 0
             fi
             echo "Tentative $i/15 — attente 10s..."
             sleep 10
           done
-          echo "Backend ne répond pas après 15 tentatives !"
+          echo "Backend ne repond pas apres 15 tentatives !"
           exit 1
 
       - name: Health Check Frontend
         run: |
           for i in {1..10}; do
             if curl -sf http://localhost:3000/; then
-              echo "Frontend opérationnel ✓"
+              echo "Frontend operationnel ✓"
               exit 0
             fi
             echo "Tentative $i/10 — attente 5s..."
             sleep 5
           done
-          echo "Frontend ne répond pas après 10 tentatives !"
+          echo "Frontend ne repond pas apres 10 tentatives !"
           exit 1
 
       - name: Health Check Worker (Celery)
         run: |
           WORKER=$(docker ps --filter "name=worker" --format "{{.Status}}" | head -1)
           if [[ "$WORKER" != *"Up"* ]]; then
-            echo "Worker Celery non actif — vérifier les logs !"
+            echo "Worker Celery non actif — verifier les logs !"
             WORKER_ID=$(docker ps --filter "name=worker" -q | head -1)
             [ -n "$WORKER_ID" ] && docker logs "$WORKER_ID" --tail 50
             exit 1
           fi
-          echo "Worker Celery opérationnel ✓"
+          echo "Worker Celery operationnel ✓"
 
   ########################################################
   # JOB 4 — OWASP ZAP DAST
@@ -238,7 +241,12 @@ jobs:
     runs-on: self-hosted
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          cd "$GITHUB_WORKSPACE"
+          git fetch origin
+          git checkout ${{ github.event.workflow_run.head_sha }} 2>/dev/null || \
+          git checkout ${{ github.event.workflow_run.head_branch }} 2>/dev/null || true
 
       - name: Login GHCR
         run: |
@@ -269,7 +277,7 @@ jobs:
           echo "ZAP exit code: $ZAP_EXIT"
 
           if [ "$ZAP_EXIT" -eq 2 ]; then
-            echo "ZAP a rencontré une erreur fatale (exit 2) — aucun rapport généré."
+            echo "ZAP a rencontre une erreur fatale (exit 2) — aucun rapport genere."
             exit 1
           fi
 
@@ -285,12 +293,12 @@ jobs:
             exit 1
           fi
 
-          echo "Rapport ZAP généré avec succès ($(wc -c < "$REPORT") bytes)"
+          echo "Rapport ZAP genere avec succes ($(wc -c < "$REPORT") bytes)"
 
       - name: Analyse ZAP Results
         run: |
           if ! command -v jq &>/dev/null; then
-            echo "jq non trouvé — installation..."
+            echo "jq non trouve — installation..."
             sudo apt-get update -qq && sudo apt-get install -y -qq jq
           fi
 
@@ -309,7 +317,7 @@ jobs:
           LOW=$(jq -r '[.site[]?.alerts[]? | select(.riskcode == "0")] | length' "$REPORT" 2>/dev/null || echo "0")
 
           echo "=============================="
-          echo "  Résultats ZAP Scan"
+          echo "  Resultats ZAP Scan"
           echo "=============================="
           echo "  Critique  (riskcode 3) : $CRITICAL"
           echo "  Haute     (riskcode 2) : $HIGH"
@@ -318,23 +326,24 @@ jobs:
           echo "=============================="
 
           if [ "$CRITICAL" -gt "0" ]; then
-            echo "ÉCHEC : $CRITICAL faille(s) CRITIQUE(S) détectée(s) !"
+            echo "ECHEC : $CRITICAL faille(s) CRITIQUE(S) detectee(s) !"
             exit 1
           fi
 
           if [ "$HIGH" -gt "0" ]; then
-            echo "ÉCHEC : $HIGH faille(s) HAUTE(S) détectée(s) !"
+            echo "ECHEC : $HIGH faille(s) HAUTE(S) detectee(s) !"
             exit 1
           fi
 
-          echo "Aucune faille critique ou haute détectée ✓"
+          echo "Aucune faille critique ou haute detectee ✓"
 
-      - name: Upload ZAP Report
+      - name: Save ZAP Report locally
         if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: zap-report
-          path: ${{ github.workspace }}/zap-report/
+        run: |
+          DEST="/opt/zap-reports/${{ github.run_id }}"
+          mkdir -p "$DEST"
+          cp -r ${{ github.workspace }}/zap-report/* "$DEST/" || true
+          echo "Rapport ZAP sauvegarde dans $DEST"
 
   ########################################################
   # JOB 5 — FALCO RUNTIME SECURITY
@@ -347,11 +356,11 @@ jobs:
     steps:
       - name: Check Falco Alerts
         run: |
-          echo "Vérification des alertes Falco..."
+          echo "Verification des alertes Falco..."
           ALERTS=$(sudo journalctl -u falco --since "5 minutes ago" \
             | grep -i "critical" || true)
           if [ -n "$ALERTS" ]; then
-            echo "Falco détecte une menace critique !"
+            echo "Falco detecte une menace critique !"
             echo "$ALERTS"
             exit 1
           fi
@@ -368,7 +377,7 @@ jobs:
     steps:
       - name: List Running Containers
         run: |
-          echo "=== CONTENEURS EN COURS D'EXÉCUTION ==="
+          echo "=== CONTENEURS EN COURS D'EXECUTION ==="
           docker ps
           echo "======================================="
 
@@ -404,7 +413,12 @@ jobs:
     if: failure()
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          cd "$GITHUB_WORKSPACE"
+          git fetch origin
+          git checkout ${{ github.event.workflow_run.head_sha }} 2>/dev/null || \
+          git checkout ${{ github.event.workflow_run.head_branch }} 2>/dev/null || true
 
       - name: Recreate .env for rollback
         run: |
@@ -444,7 +458,7 @@ jobs:
           PREV_FRONTEND="${{ needs.deploy.outputs.prev_frontend }}"
 
           if [ -z "$PREV_BACKEND" ] || [ -z "$PREV_FRONTEND" ]; then
-            echo "Pas de version précédente trouvée — rollback impossible !"
+            echo "Pas de version precedente trouvee — rollback impossible !"
             exit 1
           fi
 
@@ -457,15 +471,15 @@ jobs:
           docker compose -f docker-compose.prod.yml up -d
           sleep 15
           docker ps
-          echo "=== ROLLBACK TERMINÉ — version précédente restaurée ==="
+          echo "=== ROLLBACK TERMINE — version precedente restauree ==="
 
       - name: Verify Rollback
         run: |
           sleep 10
           if curl -sf http://localhost:8000/health; then
-            echo "Backend OK après rollback ✓"
+            echo "Backend OK apres rollback ✓"
           else
-            echo "Backend toujours KO après rollback !"
+            echo "Backend toujours KO apres rollback !"
             exit 1
           fi
 
@@ -479,72 +493,55 @@ jobs:
     if: always() && github.event.workflow_run.conclusion == 'success'
     steps:
 
-      - name: Send Email — Déploiement Réussi
+      - name: Send Email — Deploiement Reussi
         if: ${{ needs.verify-containers.result == 'success' }}
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: smtp.gmail.com
-          server_port: 465
-          secure: true
-          username: ${{ secrets.SMTP_EMAIL }}
-          password: ${{ secrets.SMTP_PASSWORD }}
-          subject: "[DÉPLOIEMENT OK] — ${{ github.event.workflow_run.head_branch }}"
-          to: ${{ secrets.NOTIFY_EMAIL }}
-          from: "GitHub Actions <${{ secrets.SMTP_EMAIL }}>"
-          html_body: |
-            <h2 style="color:#2e7d32;"> Déploiement Réussi</h2>
-            <p>L'application a été déployée avec succès en production.</p>
-            <table style="border-collapse:collapse; width:100%;">
-              <tr><td style="padding:8px; background:#f5f5f5;"><strong>Branche</strong></td>
-                  <td style="padding:8px;">${{ github.event.workflow_run.head_branch }}</td></tr>
-              <tr><td style="padding:8px; background:#f5f5f5;"><strong>Commit</strong></td>
-                  <td style="padding:8px;">${{ github.event.workflow_run.head_sha }}</td></tr>
-              <tr><td style="padding:8px; background:#f5f5f5;"><strong>Déclenché par</strong></td>
-                  <td style="padding:8px;">${{ github.actor }}</td></tr>
-              <tr><td style="padding:8px; background:#f5f5f5;"><strong>Backend</strong></td>
-                  <td style="padding:8px;">${{ needs.cosign-verify.outputs.backend_image }}</td></tr>
-              <tr><td style="padding:8px; background:#f5f5f5;"><strong>Frontend</strong></td>
-                  <td style="padding:8px;">${{ needs.cosign-verify.outputs.frontend_image }}</td></tr>
-            </table>
-            <br>
-            <a href="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-               style="background:#2e7d32; color:white; padding:10px 20px;
-                      text-decoration:none; border-radius:4px;">
-              Voir le pipeline
-            </a>
+        run: |
+          curl --ssl-reqd \
+            --url 'smtps://smtp.gmail.com:465' \
+            --user '${{ secrets.SMTP_EMAIL }}:${{ secrets.SMTP_PASSWORD }}' \
+            --mail-from '${{ secrets.SMTP_EMAIL }}' \
+            --mail-rcpt '${{ secrets.NOTIFY_EMAIL }}' \
+            --upload-file - << 'EOF'
+          From: GitHub Actions <${{ secrets.SMTP_EMAIL }}>
+          To: ${{ secrets.NOTIFY_EMAIL }}
+          Subject: [DEPLOIEMENT OK] — ${{ github.event.workflow_run.head_branch }}
+          Content-Type: text/plain; charset=utf-8
 
-      - name: Send Email — Déploiement Échoué
+          Deploiement Reussi !
+          L'application a ete deployee avec succes en production.
+
+          Branche      : ${{ github.event.workflow_run.head_branch }}
+          Commit       : ${{ github.event.workflow_run.head_sha }}
+          Declenche par: ${{ github.actor }}
+          Backend      : ${{ needs.cosign-verify.outputs.backend_image }}
+          Frontend     : ${{ needs.cosign-verify.outputs.frontend_image }}
+
+          Voir le pipeline : https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          EOF
+
+      - name: Send Email — Deploiement Echoue
         if: ${{ needs.verify-containers.result != 'success' }}
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: smtp.gmail.com
-          server_port: 465
-          secure: true
-          username: ${{ secrets.SMTP_EMAIL }}
-          password: ${{ secrets.SMTP_PASSWORD }}
-          subject: " [DÉPLOIEMENT ÉCHOUÉ] — ${{ github.event.workflow_run.head_branch }}"
-          to: ${{ secrets.NOTIFY_EMAIL }}
-          from: "GitHub Actions <${{ secrets.SMTP_EMAIL }}>"
-          html_body: |
-            <h2 style="color:#cc0000;"> Déploiement Échoué</h2>
-            <p>Une erreur s'est produite durant le pipeline CD. Un rollback a été tenté.</p>
-            <table style="border-collapse:collapse; width:100%;">
-              <tr><td style="padding:8px; background:#f5f5f5;"><strong>Branche</strong></td>
-                  <td style="padding:8px;">${{ github.event.workflow_run.head_branch }}</td></tr>
-              <tr><td style="padding:8px; background:#f5f5f5;"><strong>Commit</strong></td>
-                  <td style="padding:8px;">${{ github.event.workflow_run.head_sha }}</td></tr>
-              <tr><td style="padding:8px; background:#f5f5f5;"><strong>Déclenché par</strong></td>
-                  <td style="padding:8px;">${{ github.actor }}</td></tr>
-              <tr><td style="padding:8px; background:#f5f5f5;"><strong>cosign-verify</strong></td>
-                  <td style="padding:8px;">${{ needs.cosign-verify.result }}</td></tr>
-              <tr><td style="padding:8px; background:#f5f5f5;"><strong>deploy</strong></td>
-                  <td style="padding:8px;">${{ needs.deploy.result }}</td></tr>
-              <tr><td style="padding:8px; background:#f5f5f5;"><strong>verify-containers</strong></td>
-                  <td style="padding:8px;">${{ needs.verify-containers.result }}</td></tr>
-            </table>
-            <br>
-            <a href="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-               style="background:#cc0000; color:white; padding:10px 20px;
-                      text-decoration:none; border-radius:4px;">
-              Voir les logs CD
-            </a>
+        run: |
+          curl --ssl-reqd \
+            --url 'smtps://smtp.gmail.com:465' \
+            --user '${{ secrets.SMTP_EMAIL }}:${{ secrets.SMTP_PASSWORD }}' \
+            --mail-from '${{ secrets.SMTP_EMAIL }}' \
+            --mail-rcpt '${{ secrets.NOTIFY_EMAIL }}' \
+            --upload-file - << 'EOF'
+          From: GitHub Actions <${{ secrets.SMTP_EMAIL }}>
+          To: ${{ secrets.NOTIFY_EMAIL }}
+          Subject: [DEPLOIEMENT ECHOUE] — ${{ github.event.workflow_run.head_branch }}
+          Content-Type: text/plain; charset=utf-8
+
+          Deploiement Echoue !
+          Une erreur s'est produite durant le pipeline CD. Un rollback a ete tente.
+
+          Branche         : ${{ github.event.workflow_run.head_branch }}
+          Commit          : ${{ github.event.workflow_run.head_sha }}
+          Declenche par   : ${{ github.actor }}
+          cosign-verify   : ${{ needs.cosign-verify.result }}
+          deploy          : ${{ needs.deploy.result }}
+          verify-containers: ${{ needs.verify-containers.result }}
+
+          Voir les logs : https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          EOF
