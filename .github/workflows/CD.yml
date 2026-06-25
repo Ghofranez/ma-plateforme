@@ -73,11 +73,9 @@ jobs:
           echo "frontend=ghcr.io/${OWNER}/my-frontend:latest" >> $GITHUB_OUTPUT
 
       - name: Login GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.PAT_TOKEN }}
+        run: |
+          echo "${{ secrets.PAT_TOKEN }}" | docker login ghcr.io \
+            -u ${{ github.actor }} --password-stdin
 
       - name: Verify Backend Image
         env:
@@ -401,7 +399,7 @@ jobs:
   ########################################################
   rollback:
     name: Rollback on Failure
-    needs: [deploy, health-check, dast-zap, falco-check, verify-containers]
+    needs: [cosign-verify, deploy, health-check, dast-zap, falco-check, verify-containers]
     runs-on: self-hosted
     if: failure()
     steps:
