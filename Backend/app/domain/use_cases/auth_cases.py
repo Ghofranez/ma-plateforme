@@ -22,13 +22,13 @@ class AuthUseCases:
         if not re.search(r'[!@#$%^&*(),.?]', password):
             raise HTTPException(400, "Le mot de passe doit contenir au moins un caractère spécial")
 
-    def register(self, nom, prenom, num, email, password, confirm_password):
+    def register(self, nom, prenom, phone, email, password, confirm_password):
         if password != confirm_password:
             raise HTTPException(400, "Passwords mismatch")
         self._validate_password(password)
         if self.user_repo.get_by_email(email):
             raise HTTPException(400, "Email already used")
-        self.user_repo.create(nom, prenom, num, email, password)
+        self.user_repo.create(nom, prenom, phone, email, password)
         return {"message": "User created"}
 
     def login(self, email, password):

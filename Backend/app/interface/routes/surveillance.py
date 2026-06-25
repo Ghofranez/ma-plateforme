@@ -5,7 +5,8 @@ from pydantic         import BaseModel
 from app.infrastructure.db.session                     import get_db
 from app.infrastructure.repositories.surveillance_repo import SurveillanceRepository
 from app.middleware.auth_middleware                     import get_current_user
-from app.core.entities.user                            import User
+from app.core.entities.user import User
+from app.core.entities.analysis import Analysis
 
 router = APIRouter(prefix="/surveillance", tags=["surveillance"])
 
@@ -21,13 +22,31 @@ def activer(
 ):
     repo      = SurveillanceRepository(db)
     existante = repo.get_status(current_user.id, req.url)
+
     if existante:
+        
+        db.query(Analysis)\
+          .filter(
+              Analysis.url     == req.url,
+              Analysis.user_id == current_user.id
+          )\
+          .update({"surveillance_id": existante.id})
+        db.commit()
         return {"status": "active", "url": req.url,
                 "next_scan_at": existante.next_scan_at, "already_active": True}
 
-    s = repo.activer(current_user.id, current_user.email, req.url)
-    return {"status": "active", "url": req.url, "next_scan_at": s.next_scan_at}
+    s = repo.activer(current_user.id, req.url)
 
+
+    db.query(Analysis)\
+      .filter(
+          Analysis.url     == req.url,
+          Analysis.user_id == current_user.id
+      )\
+      .update({"surveillance_id": s.id})
+    db.commit()
+
+    return {"status": "active", "url": req.url, "next_scan_at": s.next_scan_at}
 
 @router.post("/desactiver")
 def desactiver(

@@ -20,7 +20,7 @@ import { registerUser } from "../../services/auth.service";
 type FormData = {
   nom: string;
   prenom: string;
-  num: string;
+  phone: string;
   email: string;
   password: string;
   confirmPassword: string;
@@ -45,7 +45,7 @@ export default function Register() {
   const [formData, setFormData] = useState<FormData>({
     nom: "",
     prenom: "",
-    num: "",
+    phone: "",
     email: "",
     password: "",
     confirmPassword: "",
@@ -56,7 +56,7 @@ export default function Register() {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
 
-    if (name === "num") {
+    if (name === "phone") {
       if (!/^\d*$/.test(value)) return;
 
       setnumError(
@@ -72,7 +72,7 @@ export default function Register() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (numError && formData.num) return toast.error("Numéro invalide");
+    if (numError && formData.phone) return toast.error("Numéro invalide");
 
     if (!formData.nom || !formData.prenom || !formData.email || !formData.password || !formData.confirmPassword) {
       return toast.error("Veuillez remplir tous les champs");
@@ -88,7 +88,7 @@ export default function Register() {
       await registerUser({
         nom: formData.nom,
         prenom: formData.prenom,
-        num: formData.num,
+        phone: formData.phone,
         email: formData.email,
         password: formData.password,
         confirm_password: formData.confirmPassword,
@@ -162,8 +162,8 @@ export default function Register() {
                 <CreditCard className="absolute left-3 top-3 text-slate-400 w-4 h-4" />
                 <Input
                   className="pl-10"
-                  name="num"
-                  value={formData.num}
+                  name="phone"
+                  value={formData.phone}
                   onChange={handleChange}
                   placeholder="numéro du téléphone"
                   maxLength={8}

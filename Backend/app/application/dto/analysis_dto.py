@@ -6,7 +6,8 @@ from typing import Optional
 
 
 class UrlAnalyze(BaseModel):
-    url: HttpUrl                            # URL à analyser — validée automatiquement
+    url: HttpUrl
+    surveillance_id:  Optional[int]  = None # URL à analyser 
     scan_depth: Optional[int] = 1           # profondeur (1=basique, 2=approfondi)
     include_headers: Optional[bool] = True  # activer SecurityHeaders
     include_ssl: Optional[bool] = True      # activer SSL Labs

@@ -22,7 +22,7 @@ export default function Profile() {
   const [showNewPassword,     setShowNewPassword]     = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordFocused,     setPasswordFocused]     = useState(false);
-  const [original,            setOriginal]            = useState({ firstName: "", lastName: "",num:"" });
+  const [original,            setOriginal]            = useState({ firstName: "", lastName: "",phone:"" });
   const [isDirty,             setIsDirty]             = useState(false);
 
   // ── État changement email ──
@@ -33,7 +33,7 @@ export default function Profile() {
 
   const [formData, setFormData] = useState({
     firstName: "", lastName: "", email: "",
-    num:"",
+    phone:"",
     currentPassword: "", newPassword: "", confirmPassword: "",
   });
 
@@ -45,10 +45,10 @@ export default function Profile() {
         const data = await getMe() as any;
         const loaded = {
           firstName: data.nom || "", lastName: data.prenom || "",
-          email: data.email || "", num: data.num || "",currentPassword: "", newPassword: "", confirmPassword: "",
+          email: data.email || "", phone: data.phone || "",currentPassword: "", newPassword: "", confirmPassword: "",
         };
         setFormData(loaded);
-        setOriginal({ firstName: loaded.firstName, lastName: loaded.lastName , num: loaded.num});
+        setOriginal({ firstName: loaded.firstName, lastName: loaded.lastName , phone: loaded.phone});
       } catch { toast.error("Erreur de chargement du profil"); }
       finally { setLoading(false); }
     })();
@@ -58,11 +58,11 @@ export default function Profile() {
     const { name, value } = e.target;
     setFormData(prev => {
       const updated = { ...prev, [name]: value };
-     if (name === "firstName" || name === "lastName" || name === "num") {
+     if (name === "firstName" || name === "lastName" || name === "phone") {
         setIsDirty(
           updated.firstName !== original.firstName ||
           updated.lastName  !== original.lastName  ||
-          updated.num       !== original.num
+          updated.phone       !== original.phone
      );
     }
       return updated;
@@ -77,8 +77,8 @@ export default function Profile() {
   const saveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await updateProfile({ nom: formData.firstName, prenom: formData.lastName, num: formData.num });
-      setOriginal({ firstName: formData.firstName, lastName: formData.lastName ,num: formData.num });
+      await updateProfile({ nom: formData.firstName, prenom: formData.lastName, phone: formData.phone });
+      setOriginal({ firstName: formData.firstName, lastName: formData.lastName ,phone: formData.phone });
       setIsDirty(false);
       setUpdateSuccess(true);
       toast.success("Profil mis à jour !");
@@ -180,8 +180,8 @@ export default function Profile() {
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-semibold text-gray-500">Numéro de téléphone</label>
                 <input
-                   name="num"
-                   value={formData.num}
+                   name="phone"
+                   value={formData.phone}
                    onChange={handleChange}
                    placeholder="Ex: 12345678"
                    maxLength={8}

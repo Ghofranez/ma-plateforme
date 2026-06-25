@@ -15,7 +15,7 @@ def me(current_user: User = Depends(get_current_user)):
         "nom":    current_user.nom,
         "prenom": current_user.prenom,
         "email":  current_user.email,
-        "num":    current_user.num,
+        "phone":    current_user.phone,
         "role":   current_user.role,
     }
 
@@ -29,7 +29,7 @@ def update_profile(
         current_user.email,
         data.nom,
         data.prenom,
-        data.num        
+        data.phone
     )
     return {"message": "Profil mis à jour"}
 

@@ -5,8 +5,8 @@ class AnalysisUseCases:
     def __init__(self, analysis_repo):
         self.analysis_repo = analysis_repo
 
-    def get_history(self, user_email: str):
-        entries = self.analysis_repo.get_by_user(user_email)
+    def get_history(self, user_id: int):
+        entries = self.analysis_repo.get_by_user(user_id)
         return [
             {
                 "id":              str(e.id),
@@ -55,8 +55,8 @@ class AnalysisUseCases:
             return lines if lines else []
         return [str(value)]
 
-    def delete_entry(self, analysis_id: str, user_email: str):
-        entry = self.analysis_repo.get_by_id(analysis_id)
-        if entry and entry.user_email == user_email:
-            return self.analysis_repo.delete(analysis_id)
-        return False
+    def delete_entry(self, analysis_id: str, user_id: int):
+     entry = self.analysis_repo.get_by_id(analysis_id)
+     if entry and entry.user_id == user_id:
+        return self.analysis_repo.delete(analysis_id)
+     return False

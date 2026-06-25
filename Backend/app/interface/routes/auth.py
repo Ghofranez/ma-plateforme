@@ -30,7 +30,8 @@ def list_users(
             "nom": u.nom,
             "prenom": u.prenom,
             "email": u.email,
-            "telephone": u.num
+            "telephone": u.phone,
+            "role" : u.role,
         }
         for u in users
     ]
@@ -56,7 +57,7 @@ def set_admin(
 # ── Inscription ───────────────────────────────────────────────────────────
 @router.post("/register")
 def register(user: UserCreate, uc: AuthUseCases = Depends(get_use_case)):
-    return uc.register(user.nom, user.prenom, user.num, user.email, user.password, user.confirm_password)
+    return uc.register(user.nom, user.prenom, user.phone, user.email, user.password, user.confirm_password)
 
 # ── Login ─────────────────────────────────────────────────────────────────
 @router.post("/login")

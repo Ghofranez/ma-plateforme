@@ -7,32 +7,31 @@ class SurveillanceRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def activer(self, user_id: int, user_email: str, url: str) -> Surveillance:
-        from app.core.entities.analysis import Analysis
-        now = datetime.utcnow()
-        last_analysis = (
-            self.db.query(Analysis)
-            .filter(
-                Analysis.user_id == user_id,
-                Analysis.url     == url,
-                Analysis.status  == "completed",
-            )
-            .order_by(Analysis.created_at.desc())
-            .first()
+    def activer(self, user_id: int, url: str) -> Surveillance:
+     from app.core.entities.analysis import Analysis
+     now = datetime.utcnow()
+     last_analysis = (
+        self.db.query(Analysis)
+        .filter(
+            Analysis.user_id == user_id,
+            Analysis.url     == url,
+            Analysis.status  == "completed",
         )
-        surveil = Surveillance(
-            user_id      = user_id,
-            user_email   = user_email,
-            url          = url,
-            active       = True,
-            last_scan_at = None,
-            next_scan_at = now + timedelta(hours=24),
-            last_rapport = last_analysis.full_report if last_analysis else None,
-        )
-        self.db.add(surveil)
-        self.db.commit()
-        self.db.refresh(surveil)
-        return surveil
+        .order_by(Analysis.created_at.desc())
+        .first()
+     )
+     surveil = Surveillance(
+         user_id      = user_id,
+         url          = url,
+         active       = True,
+         last_scan_at = None,
+         next_scan_at = now + timedelta(hours=24),
+         last_rapport = last_analysis.full_report if last_analysis else None,
+     )
+     self.db.add(surveil)
+     self.db.commit()
+     self.db.refresh(surveil)
+     return surveil
 
     def desactiver(self, user_id: int, url: str) -> None:
         self.db.query(Surveillance).filter(
@@ -57,7 +56,7 @@ class SurveillanceRepository:
 
     def get_all_active_by_user(self, user_id: int) -> list[Surveillance]:
         return self.db.query(Surveillance).filter(
-            Surveillance.user_id == user_id,      
+            Surveillance.user_id == user_id,
             Surveillance.active  == True,
         ).all()
 

@@ -363,7 +363,7 @@ def _process_complet(surveil, new_rapport: dict, db):
     if not anomalies:
         logger.info(f"[SURVEILLANCE] Aucun changement pour {surveil.url}")
         send_scan_ok_alert(
-            to_email   = surveil.user_email,
+            to_email   = surveil.user.email,
             url        = surveil.url,
             scan_type  = "complet (24h)",
             risk_score = risk_score,
@@ -372,7 +372,7 @@ def _process_complet(surveil, new_rapport: dict, db):
     else:
         logger.warning(f"[SURVEILLANCE] {len(anomalies)} anomalie(s) sur {surveil.url}")
         send_scan_complet_alert(
-            to_email        = surveil.user_email,
+            to_email        = surveil.user.email,
             url             = surveil.url,
             anomalies       = anomalies,
             recommendations = recommendations,
@@ -483,7 +483,7 @@ def scan_uptime_toutes_urls():
                 if not result.get("is_up"):
                     logger.warning(f"[UPTIME] Site DOWN : {surveil.url}")
                     send_anomaly_alert(
-                        to_email  = surveil.user_email,
+                        to_email  = surveil.user.email,
                         url       = surveil.url,
                         anomalies = [{
                             "type":     "AVAILABILITY",

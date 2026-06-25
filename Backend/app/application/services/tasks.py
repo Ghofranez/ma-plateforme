@@ -1189,13 +1189,42 @@ def _build_summary(risk_score: int, recommendations: dict) -> str:
 
 # ─── Tâche Celery ────────────────────────────────────────────────────────────
 
+def _mark_analysis_failed(task_reference: str, user_id: int, url: str, error_message: str) -> None:
+    db = SessionLocal()
+    try:
+        existing = db.query(Analysis).filter(
+            Analysis.reference == task_reference
+        ).first()
+
+        if existing:
+            existing.status          = "failed"
+            existing.recommendations = f"L'analyse a échoué : {error_message[:500]}"
+            db.commit()
+        else:
+            repo = AnalysisRepository(db)
+            repo.create_full(
+                user_id         = user_id,
+                url             = url,
+                status          = "failed",
+                full_report     = {"error": error_message},
+                summary         = None,
+                risk_score      = 0,
+                recommendations = f"L'analyse a échoué : {error_message[:500]}",
+                reference       = task_reference,
+            )
+    except Exception:
+        logger.error("Impossible de marquer l'analyse comme échouée en base", exc_info=True)
+    finally:
+        db.close()
+
 @celery_app.task(
     bind=True,
     soft_time_limit=1500,
     time_limit=1600,
     max_retries=1,
 )
-def scan_url_task(self, url: str, user_id: int, user_email: str):
+
+def scan_url_task(self, url: str, user_id: int, surveillance_id: int = None):
 
     OUTILS = [
         ("headers",       "Protection du navigateur",        lambda: _safe_scan(scan_headers,           url, timeout=30)),
@@ -1212,143 +1241,122 @@ def scan_url_task(self, url: str, user_id: int, user_email: str):
     raw_results  = {}
     total_outils = len(OUTILS)
 
-    # Tous les outils initialisés en "pending" dès le départ
     partial_results = {
-        key: {
-            "label":  SECTION_LABELS.get(key, key),
-            "status": "pending",
-            "detail": "En attente...",
-            "raw":    {},
-        }
+        key: {"label": SECTION_LABELS.get(key, key), "status": "pending", "detail": "En attente...", "raw": {}}
         for key, label, _ in OUTILS
     }
 
     self.update_state(
         state="PROGRESS",
         meta={
-            "status":          "Démarrage de l'analyse...",
-            "progress":        5,
-            "current_tool":    None,
-            "current_label":   None,
+            "status": "Démarrage de l'analyse...", "progress": 5,
+            "current_tool": None, "current_label": None,
             "partial_results": partial_results,
         }
     )
 
-    # Lancement parallèle
-    completed_count = 0
     try:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=total_outils) as executor:
-            future_to_info = {
-                executor.submit(fn): (key, label)
-                for key, label, fn in OUTILS
-            }
+        completed_count = 0
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=total_outils) as executor:
+                future_to_info = {executor.submit(fn): (key, label) for key, label, fn in OUTILS}
 
-            for future in concurrent.futures.as_completed(future_to_info, timeout=1450):
-                key, label = future_to_info[future]
-                completed_count += 1
+                for future in concurrent.futures.as_completed(future_to_info, timeout=1450):
+                    key, label = future_to_info[future]
+                    completed_count += 1
+                    try:
+                        raw = future.result()
+                    except SoftTimeLimitExceeded:
+                        raise
+                    except Exception as exc:
+                        raw = {"status": "failed", "error": str(exc)}
 
-                try:
-                    raw = future.result()
-                except SoftTimeLimitExceeded:
-                    raise
-                except Exception as exc:
-                    raw = {"status": "failed", "error": str(exc)}
+                    raw_results[key]     = raw
+                    partial_results[key] = _summarize_tool_result(key, raw)
 
-                raw_results[key]     = raw
-                partial_results[key] = _summarize_tool_result(key, raw)
+                    self.update_state(
+                        state="PROGRESS",
+                        meta={
+                            "status": f"Analyse en cours ({completed_count}/{total_outils} terminés)...",
+                            "progress": int(10 + (completed_count / total_outils) * 75),
+                            "current_tool": key, "current_label": label,
+                            "partial_results": partial_results,
+                        }
+                    )
 
-                self.update_state(
-                    state="PROGRESS",
-                    meta={
-                        "status":          f"Analyse en cours ({completed_count}/{total_outils} terminés)...",
-                        "progress":        int(10 + (completed_count / total_outils) * 75),
-                        "current_tool":    key,
-                        "current_label":   label,
-                        "partial_results": partial_results,
-                    }
-                )
+        except concurrent.futures.TimeoutError:
+            for key, label, _ in OUTILS:
+                if key not in raw_results:
+                    raw_results[key]     = {"status": "failed", "error": "timeout global", "error_type": "timeout"}
+                    partial_results[key] = _summarize_tool_result(key, raw_results[key])
 
-    except concurrent.futures.TimeoutError:
-        for key, label, _ in OUTILS:
-            if key not in raw_results:
-                raw_results[key]     = {"status": "failed", "error": "timeout global", "error_type": "timeout"}
-                partial_results[key] = _summarize_tool_result(key, raw_results[key])
+        self.update_state(
+            state="PROGRESS",
+            meta={"status": "Calcul du score de risque...", "progress": 88,
+                  "current_tool": None, "current_label": None, "partial_results": partial_results}
+        )
 
-    except SoftTimeLimitExceeded:
-        raise
+        recommendations, risk_score = _build_recommendations(raw_results)
+        display_report              = _build_display_report(raw_results, recommendations, risk_score)
+        all_recs_flat               = [rec for section in recommendations.values() for rec in section]
 
-    # Calcul du score
-    self.update_state(
-        state="PROGRESS",
-        meta={
-            "status":          "Calcul du score de risque...",
-            "progress":        88,
-            "current_tool":    None,
-            "current_label":   None,
-            "partial_results": partial_results,
+        full_report = {
+            **raw_results,
+            "risk_score":      risk_score,
+            "recommendations": recommendations,
+            "display":         display_report,
         }
-    )
 
-    recommendations, risk_score = _build_recommendations(raw_results)
-    display_report              = _build_display_report(raw_results, recommendations, risk_score)
-    all_recs_flat               = [rec for section in recommendations.values() for rec in section]
+        self.update_state(
+            state="PROGRESS",
+            meta={"status": "Sauvegarde du rapport...", "progress": 98,
+                  "current_tool": None, "current_label": None, "partial_results": partial_results}
+        )
 
-    full_report = {
-        **raw_results,
-        "risk_score":      risk_score,
-        "recommendations": recommendations,
-        "display":         display_report,
-    }
+        db = SessionLocal()
+        try:
+            existing = db.query(Analysis).filter(
+                Analysis.reference == self.request.id
+            ).first()
 
-    # Sauvegarde
-    self.update_state(
-        state="PROGRESS",
-        meta={
-            "status":          "Sauvegarde du rapport...",
-            "progress":        98,
-            "current_tool":    None,
-            "current_label":   None,
-            "partial_results": partial_results,
-        }
-    )
-
-    db = SessionLocal()
-    try:
-        existing = db.query(Analysis).filter(
-            Analysis.task_id == self.request.id
-        ).first()
-
-        if existing:
-            existing.status          = "completed"
-            existing.full_report     = full_report
-            existing.summary         = {
+            summary_data = {
                 "grade":        raw_results.get("headers", {}).get("grade"),
                 "risk":         risk_score,
                 "risk_label":   display_report["risk_level"]["label"],
                 "summary_text": display_report["summary"],
             }
-            existing.risk_score      = risk_score
-            existing.recommendations = "\n".join(all_recs_flat)
-            db.commit()
-        else:
-            repo = AnalysisRepository(db)
-            repo.create_full(
-                user_id         = user_id,
-                user_email      = user_email,
-                url             = url,
-                status          = "completed",
-                full_report     = full_report,
-                summary         = {
-                    "grade":        raw_results.get("headers", {}).get("grade"),
-                    "risk":         risk_score,
-                    "risk_label":   display_report["risk_level"]["label"],
-                    "summary_text": display_report["summary"],
-                },
-                risk_score      = risk_score,
-                recommendations = "\n".join(all_recs_flat),
-                task_id         = self.request.id,
-            )
-    finally:
-        db.close()
 
-    return full_report
+            if existing:
+                existing.status          = "completed"
+                existing.full_report     = full_report
+                existing.summary         = summary_data
+                existing.risk_score      = risk_score
+                existing.recommendations = "\n".join(all_recs_flat)
+                existing.surveillance_id = surveillance_id
+                db.commit()
+            else:
+                repo = AnalysisRepository(db)
+                repo.create_full(
+                    user_id         = user_id,
+                    url             = url,
+                    status          = "completed",
+                    full_report     = full_report,
+                    summary         = summary_data,
+                    risk_score      = risk_score,
+                    recommendations = "\n".join(all_recs_flat),
+                    reference       = self.request.id,
+                )
+        finally:
+            db.close()
+
+        return full_report
+
+    except SoftTimeLimitExceeded:
+        logger.error(f"Délai maximum dépassé pour l'analyse de {url} (task {self.request.id})")
+        _mark_analysis_failed(self.request.id, user_id, url, "Délai maximum dépassé")
+        raise
+
+    except Exception as exc:
+        logger.error(f"Erreur critique dans scan_url_task pour {url} : {exc}", exc_info=True)
+        _mark_analysis_failed(self.request.id, user_id, url, str(exc))
+        raise

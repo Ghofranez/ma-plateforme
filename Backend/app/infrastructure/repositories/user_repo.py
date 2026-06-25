@@ -12,21 +12,21 @@ class UserRepository:
     def get_by_id(self, user_id: int):
         return self.db.query(User).filter(User.id == user_id).first()
 
-    def create(self, nom, prenom, num, email, password):
+    def create(self, nom, prenom, phone, email, password):
         user = User(
-            nom=nom, prenom=prenom, num=num if num else None,
+            nom=nom, prenom=prenom, phone=phone if phone else None,
             email=email, password=hash_password(password)
         )
         self.db.add(user)
         self.db.commit()
         return user
 
-    def update_profile(self, email: str, nom: str, prenom: str, num: str =None):
+    def update_profile(self, email: str, nom: str, prenom: str, phone: str =None):
         user = self.get_by_email(email)
         user.nom    = nom
         user.prenom = prenom
-        if num :
-            user.num = num
+        if phone :
+            user.phone = phone
         self.db.commit()
 
     def update_password(self, email: str, new_password: str):

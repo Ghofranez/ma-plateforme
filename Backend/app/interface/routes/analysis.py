@@ -34,14 +34,14 @@ def analyze_url(
     db:           Session = Depends(get_db),
 ):
 
-    task = scan_url_task.delay(str(data.url), current_user.id, current_user.email)
+    task = scan_url_task.delay(str(data.url), current_user.id, data.surveillance_id)
 
     db_analysis = Analysis(
         user_id    = current_user.id,
-        user_email = current_user.email,
         url        = str(data.url),
         status     = "processing",
-        task_id    = task.id,
+        reference  = task.id,
+        surveillance_id=data.surveillance_id,
     )
     db.add(db_analysis)
     db.commit()
@@ -140,7 +140,7 @@ def delete_history(
     db:           Session = Depends(get_db),
     current_user: User    = Depends(get_current_user),
 ):
-    return delete_history_item(db, item_id, current_user.email,user_id=current_user.id )
+    return delete_history_item(db, item_id, user_id=current_user.id)
 
 
 @router.get("/tasks/en-cours")

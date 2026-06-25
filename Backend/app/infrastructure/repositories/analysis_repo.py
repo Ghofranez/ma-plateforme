@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from app.core.entities.analysis import Analysis
 from datetime import datetime
 
+
 class AnalysisRepository:
     def __init__(self, db: Session):
         self.db = db
@@ -9,26 +10,23 @@ class AnalysisRepository:
     def create_full(
         self,
         user_id: int,
-        user_email: str,
         url: str,
         status: str,
         full_report,
         summary,
         risk_score: int = 0,
         recommendations: str = "",
-        task_id: str = None,
-
+        reference: str = None,
     ):
         entry = Analysis(
             user_id         = user_id,
-            user_email      = user_email,
             url             = url,
             status          = status,
             full_report     = full_report,
             summary         = summary,
             risk_score      = risk_score,
             recommendations = recommendations,
-            task_id         = task_id,
+            reference       = reference,
         )
         self.db.add(entry)
         self.db.commit()
@@ -67,7 +65,7 @@ class AnalysisRepository:
         return self.db.query(Analysis)\
             .filter(
                 Analysis.user_id == user_id,
-                Analysis.status.in_(["pending", "running"]),
+                Analysis.status == "processing",
                 Analysis.created_at >= since,
             )\
             .order_by(Analysis.created_at.desc())\
