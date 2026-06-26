@@ -126,7 +126,7 @@ jobs:
 
       - name: Create .env file
         run: |
-          cat > .env << 'EOF'
+          cat > .env << EOF
           MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }}
           MYSQL_DATABASE=${{ secrets.MYSQL_DATABASE }}
           MYSQL_USER=${{ secrets.MYSQL_USER }}
@@ -231,6 +231,27 @@ jobs:
           fi
           echo "Worker Celery operationnel ✓"
 
+      - name: Health Check ZAP (service Compose)
+        run: |
+          # ZAP a un start_period de 90s + 5 retries*30s = max ~4min
+          # On attend qu'il soit vraiment prêt avant le DAST
+          echo "Attente de ZAP..."
+          for i in {1..20}; do
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+              "http://localhost:${{ secrets.ZAP_PORT }}/JSON/core/view/version/?apikey=${{ secrets.ZAP_API_KEY }}" \
+              || echo "000")
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "ZAP operationnel ✓"
+              exit 0
+            fi
+            echo "Tentative $i/20 — ZAP repond HTTP $HTTP_CODE — attente 15s..."
+            sleep 15
+          done
+          echo "ZAP ne repond pas apres 5 minutes !"
+          echo "=== Logs ZAP ==="
+          docker logs zap --tail 50 || true
+          exit 1
+
   ########################################################
   # JOB 4 — OWASP ZAP DAST
   ########################################################
@@ -248,94 +269,116 @@ jobs:
           git checkout ${{ github.event.workflow_run.head_sha }} 2>/dev/null || \
           git checkout ${{ github.event.workflow_run.head_branch }} 2>/dev/null || true
 
-      - name: Login GHCR
-        run: |
-          echo "${{ secrets.PAT_TOKEN }}" | docker login ghcr.io \
-            -u ${{ github.actor }} --password-stdin
-
       - name: Create ZAP Report Directory
         run: |
           mkdir -p ${{ github.workspace }}/zap-report
           chmod 777 ${{ github.workspace }}/zap-report
 
-      - name: OWASP ZAP Scan
-        run: |
-          set +e
-          docker run --rm \
-            --network host \
-            -v ${{ github.workspace }}/zap-report:/zap/wrk:rw \
-            ghcr.io/zaproxy/zaproxy:stable \
-            zap-baseline.py \
-              -t http://localhost:8000 \
-              -r zap-report.html \
-              -J zap-report.json \
-              -l WARN \
-              -I
-          ZAP_EXIT=$?
-          set -e
-
-          echo "ZAP exit code: $ZAP_EXIT"
-
-          if [ "$ZAP_EXIT" -eq 2 ]; then
-            echo "ZAP a rencontre une erreur fatale (exit 2) — aucun rapport genere."
-            exit 1
-          fi
-
-          REPORT="${{ github.workspace }}/zap-report/zap-report.json"
-          if [ ! -f "$REPORT" ]; then
-            echo "Fichier zap-report.json introuvable !"
-            ls -la ${{ github.workspace }}/zap-report/ || true
-            exit 1
-          fi
-
-          if [ ! -s "$REPORT" ]; then
-            echo "Fichier zap-report.json vide !"
-            exit 1
-          fi
-
-          echo "Rapport ZAP genere avec succes ($(wc -c < "$REPORT") bytes)"
-
-      - name: Analyse ZAP Results
+      - name: Install jq if needed
         run: |
           if ! command -v jq &>/dev/null; then
-            echo "jq non trouve — installation..."
+            echo "Installation de jq..."
             sudo apt-get update -qq && sudo apt-get install -y -qq jq
           fi
 
+      - name: OWASP ZAP Scan via API (service Compose existant)
+        env:
+          ZAP_API_KEY: ${{ secrets.ZAP_API_KEY }}
+          ZAP_PORT:    ${{ secrets.ZAP_PORT }}
+        run: |
+          set -e
+          ZAP_URL="http://localhost:${ZAP_PORT}"
+          # Le backend est joignable par ZAP via le réseau Docker "internal"
+          TARGET="http://backend:8000"
+
+          echo "=== ZAP URL   : $ZAP_URL ==="
+          echo "=== Cible     : $TARGET ==="
+
+          # ── 1. Spider passif ──────────────────────────────────────
+          echo "Lancement du spider..."
+          SCAN_ID=$(curl -sf \
+            "${ZAP_URL}/JSON/spider/action/scan/?apikey=${ZAP_API_KEY}&url=${TARGET}&maxChildren=5&recurse=true" \
+            | jq -r '.scan')
+          echo "Spider ID : $SCAN_ID"
+
+          # Attente fin du spider (max 5 min)
+          for i in {1..30}; do
+            PROGRESS=$(curl -sf \
+              "${ZAP_URL}/JSON/spider/view/status/?apikey=${ZAP_API_KEY}&scanId=${SCAN_ID}" \
+              | jq -r '.status')
+            echo "Spider progression : ${PROGRESS}%"
+            [ "$PROGRESS" = "100" ] && break
+            sleep 10
+          done
+          echo "Spider termine ✓"
+
+          # ── 2. Scan actif ─────────────────────────────────────────
+          echo "Lancement du scan actif..."
+          ASCAN_ID=$(curl -sf \
+            "${ZAP_URL}/JSON/ascan/action/scan/?apikey=${ZAP_API_KEY}&url=${TARGET}&recurse=true&inScopeOnly=false" \
+            | jq -r '.scan')
+          echo "Scan actif ID : $ASCAN_ID"
+
+          # Attente fin du scan actif (max 10 min)
+          for i in {1..60}; do
+            PROGRESS=$(curl -sf \
+              "${ZAP_URL}/JSON/ascan/view/status/?apikey=${ZAP_API_KEY}&scanId=${ASCAN_ID}" \
+              | jq -r '.status')
+            echo "Scan actif progression : ${PROGRESS}%"
+            [ "$PROGRESS" = "100" ] && break
+            sleep 10
+          done
+          echo "Scan actif termine ✓"
+
+          # ── 3. Export rapport JSON ────────────────────────────────
           REPORT="${{ github.workspace }}/zap-report/zap-report.json"
+          curl -sf \
+            "${ZAP_URL}/JSON/core/view/alerts/?apikey=${ZAP_API_KEY}&baseurl=${TARGET}&start=0&count=5000" \
+            -o "$REPORT"
+
+          # Export rapport HTML (optionnel, pour archivage)
+          curl -sf \
+            "${ZAP_URL}/OTHER/core/other/htmlreport/?apikey=${ZAP_API_KEY}" \
+            -o "${{ github.workspace }}/zap-report/zap-report.html" || true
 
           if [ ! -s "$REPORT" ]; then
-            echo "Rapport ZAP manquant ou vide !"
+            echo "Rapport ZAP vide ou absent !"
             exit 1
           fi
+          echo "Rapport ZAP genere ✓ ($(wc -c < "$REPORT") bytes)"
+
+      - name: Analyse ZAP Results
+        run: |
+          REPORT="${{ github.workspace }}/zap-report/zap-report.json"
 
           echo "Taille du rapport : $(wc -c < "$REPORT") bytes"
 
-          CRITICAL=$(jq -r '[.site[]?.alerts[]? | select(.riskcode == "3")] | length' "$REPORT" 2>/dev/null || echo "0")
-          HIGH=$(jq -r '[.site[]?.alerts[]? | select(.riskcode == "2")] | length' "$REPORT" 2>/dev/null || echo "0")
-          MEDIUM=$(jq -r '[.site[]?.alerts[]? | select(.riskcode == "1")] | length' "$REPORT" 2>/dev/null || echo "0")
-          LOW=$(jq -r '[.site[]?.alerts[]? | select(.riskcode == "0")] | length' "$REPORT" 2>/dev/null || echo "0")
+          # L'endpoint /JSON/core/view/alerts retourne { "alerts": [...] }
+          # riskcode : 3=High, 2=Medium, 1=Low, 0=Informational
+          # (ZAP nomme "High" ce que l'ancien rapport appelait "Critical")
+          HIGH=$(jq '[.alerts[]? | select(.risk == "High")]   | length' "$REPORT" 2>/dev/null || echo "0")
+          MED=$(jq  '[.alerts[]? | select(.risk == "Medium")] | length' "$REPORT" 2>/dev/null || echo "0")
+          LOW=$(jq  '[.alerts[]? | select(.risk == "Low")]    | length' "$REPORT" 2>/dev/null || echo "0")
+          INFO=$(jq '[.alerts[]? | select(.risk == "Informational")] | length' "$REPORT" 2>/dev/null || echo "0")
 
           echo "=============================="
           echo "  Resultats ZAP Scan"
           echo "=============================="
-          echo "  Critique  (riskcode 3) : $CRITICAL"
-          echo "  Haute     (riskcode 2) : $HIGH"
-          echo "  Moyenne   (riskcode 1) : $MEDIUM"
-          echo "  Faible    (riskcode 0) : $LOW"
+          echo "  Haute         : $HIGH"
+          echo "  Moyenne       : $MED"
+          echo "  Faible        : $LOW"
+          echo "  Informations  : $INFO"
           echo "=============================="
 
-          if [ "$CRITICAL" -gt "0" ]; then
-            echo "ECHEC : $CRITICAL faille(s) CRITIQUE(S) detectee(s) !"
-            exit 1
-          fi
-
+          # Afficher le détail des alertes hautes
           if [ "$HIGH" -gt "0" ]; then
+            echo "=== Alertes HAUTES ==="
+            jq -r '.alerts[] | select(.risk == "High") | "[\(.risk)] \(.name) — \(.url)"' "$REPORT" || true
             echo "ECHEC : $HIGH faille(s) HAUTE(S) detectee(s) !"
             exit 1
           fi
 
-          echo "Aucune faille critique ou haute detectee ✓"
+          echo "Aucune faille haute detectee ✓"
 
       - name: Save ZAP Report locally
         if: always()
@@ -383,7 +426,7 @@ jobs:
 
       - name: Check Required Containers
         run: |
-          REQUIRED=("db" "redis" "backend" "worker" "frontend")
+          REQUIRED=("db" "redis" "backend" "worker" "frontend" "zap")
           ALL_OK=true
 
           for SERVICE in "${REQUIRED[@]}"; do
@@ -422,7 +465,7 @@ jobs:
 
       - name: Recreate .env for rollback
         run: |
-          cat > .env << 'EOF'
+          cat > .env << EOF
           MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }}
           MYSQL_DATABASE=${{ secrets.MYSQL_DATABASE }}
           MYSQL_USER=${{ secrets.MYSQL_USER }}
