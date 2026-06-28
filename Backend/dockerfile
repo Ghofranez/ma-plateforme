@@ -1,27 +1,32 @@
-# ── Téléchargement Nuclei ────────────────────────────────
-FROM alpine:3.19 AS nuclei-builder
-RUN apk add --no-cache curl unzip
-RUN curl -L https://github.com/projectdiscovery/nuclei/releases/download/v3.8.0/nuclei_3.8.0_linux_amd64.zip \
-    -o nuclei.zip && \
-    unzip nuclei.zip && \
-    mv nuclei /usr/local/bin/nuclei && \
-    chmod +x /usr/local/bin/nuclei
+# ARG global AVANT tout FROM
+ARG NUCLEI_VERSION=v3.9.0
 
-# ── Image finale ─────────────────────────────────────────
+# Stage intermédiaire pour nuclei
+FROM projectdiscovery/nuclei:${NUCLEI_VERSION} AS nuclei_bin
+
+# ── Image finale ──────────────────────────────────────────
 FROM python:3.11-alpine3.21
+
 WORKDIR /app
-COPY --from=projectdiscovery/nuclei:v3.8.0 /usr/local/bin/nuclei /usr/local/bin/nuclei
+
+COPY --from=nuclei_bin /usr/local/bin/nuclei /usr/local/bin/nuclei
 RUN chmod +x /usr/local/bin/nuclei
+
 RUN apk update && apk upgrade --no-cache
 RUN apk add --no-cache wget curl ca-certificates unzip git
+
 RUN adduser -D celeryuser && \
     mkdir -p /home/celeryuser/nuclei-templates && \
     chown -R celeryuser:celeryuser /home/celeryuser && \
     chown -R celeryuser:celeryuser /app
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir --timeout=300 --retries=5 -r requirements.txt
 RUN pip install --upgrade setuptools wheel
+
 ENV NUCLEI_TEMPLATES_PATH=/home/celeryuser/nuclei-templates
+
 USER celeryuser
 COPY . .
+
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

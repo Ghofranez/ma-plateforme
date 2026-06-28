@@ -79,7 +79,7 @@ def run_full_scan(url: str) -> dict:
     ]
 
     # Chaque outil a son propre délai maximum selon sa vitesse habituelle
-    # Nuclei (420s) et ZAP (180s) sont les plus lents car ils font des tests actifs
+    # Nuclei (420s) et ZAP (420s) sont les plus lents car ils font des tests actifs
     TIMEOUTS = {
         "headers":       30,
         "virustotal":    60,
@@ -87,7 +87,7 @@ def run_full_scan(url: str) -> dict:
         "urlscan":       90,
         "shodan":        30,
         "wappalyzer":    60,
-        "zap":           180,
+        "zap":           420,
         "nuclei":        420,
         "ssl":           300,
     }
@@ -107,7 +107,7 @@ def run_full_scan(url: str) -> dict:
         completed_futures = set()
         try:
             for future in concurrent.futures.as_completed(
-                future_to_key, timeout=600
+                future_to_key, timeout=900
             ):
                 key = future_to_key[future]
                 completed_futures.add(future)
