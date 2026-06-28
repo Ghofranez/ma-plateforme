@@ -158,3 +158,13 @@ ignore:
           Vulnérabilité dans le binaire nuclei (dépendance upstream).
           Fix dépend de nuclei avec golang.org/x/net >= 0.54.0.
         expires: '2026-09-01T00:00:00.000Z'
+
+  # ══════════════════════════════════════════════════════════
+  # NUCLEI — labstack/echo middleware (Directory Traversal)
+  # ══════════════════════════════════════════════════════════
+  SNYK-GOLANG-GITHUBCOMLABSTACKECHOV4MIDDLEWARE-17660784:
+    - '*':
+        reason: >
+          CVE dans nuclei (labstack/echo/v4/middleware v4.13.4) — fix v4.15.3
+          dépend de nuclei upstream, non exploitable dans notre contexte
+        expires: 2026-12-31T00:00:00.000Z
