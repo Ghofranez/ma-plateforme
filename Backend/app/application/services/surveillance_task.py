@@ -26,15 +26,15 @@ from app.application.services.tools.availability     import check_availability
 logger = logging.getLogger(__name__)
 
 ANOMALY_RULES = {
-    "risk_score_delta":   20,
-    "malicious_verdicts": ["malicious", "phishing", "malware"],
-    "critical_headers":   ["Strict-Transport-Security", "Content-Security-Policy"],
-    "ssl_expiry_days":    14,
+    "risk_score_delta":   10, # Alerte si le score monte de +20 points
+    "malicious_verdicts": ["malicious", "phishing", "malware"], # Types de verdicts considérés dangereux
+    "critical_headers":   ["Strict-Transport-Security", "Content-Security-Policy"], # En-têtes dont la disparition déclenche une alerte
+    "ssl_expiry_days":    14,  # Alerte si le certificat expire dans moins de 14j
 }
 
 
 # ─── Utilitaires ──────────────────────────────────────────────────────────────
-
+# URL → IP pour Shodan
 def _resolve_ip(url: str) -> str | None:
     try:
         from urllib.parse import urlparse
@@ -43,7 +43,7 @@ def _resolve_ip(url: str) -> str | None:
     except Exception:
         return None
 
-
+# Attrape les exceptions de chaque outil
 def _safe_run(fn, *args):
     try:
         return fn(*args)
@@ -53,7 +53,7 @@ def _safe_run(fn, *args):
 
 _NO_FALLBACK_ERROR_TYPES = {"rate_limit", "timeout", "network"}
 
-
+# SSL Labs → testssl si échec
 def _scan_ssl_with_fallback(url: str) -> dict:
     result = _safe_run(scan_ssl, url)
     if result.get("status") == "completed":
@@ -69,7 +69,8 @@ def _scan_ssl_with_fallback(url: str) -> dict:
     fallback["fallback_used"] = True
     return fallback
 
-
+# Premier scan : attend 24h après la création de la surveillance
+# Scans suivants : attend 24h après le dernier scan
 def url_est_prete_a_scanner(surveil) -> bool:
     maintenant = datetime.utcnow()
 
@@ -87,7 +88,9 @@ def _parse_old_rapport(surveil) -> dict:
             return {}
     return old
 
-
+# Crée une entrée Analysis en base après chaque scan automatique
+# Stocke : rapport brut + score de risque + recommandations + résumé
+# Retourne l'ID de l'analyse créée (utilisé dans les emails)
 def _sauvegarder_analysis(db, surveil, new_rapport, anomalies,
                            risk_score=None, recommendations=None,
                            display_report=None) -> int | None:
@@ -149,6 +152,8 @@ def _run_scan_complet(url: str) -> dict:
 
 # ─── Détection d'anomalies ────────────────────────────────────────────────────
 
+# Compare l'ancien rapport avec le nouveau et détecte les changements dangereux
+# Chaque vérification est indépendante — une anomalie par type maximum
 def detect_anomalies(old_data: dict, new_data: dict) -> list[dict]:
     anomalies = []
 
@@ -329,7 +334,12 @@ def detect_anomalies(old_data: dict, new_data: dict) -> list[dict]:
 
 
 # ─── Traitement scan complet ──────────────────────────────────────────────────
-
+# Orchestre tout ce qui se passe après un scan :
+#   1. Compare avec l'ancien rapport → détecte les anomalies
+#   2. Calcule le score de risque + recommandations
+#   3. Sauvegarde l'analyse en base
+#   4. Envoie l'email adapté (OK ou alerte)
+#   5. Met à jour last_rapport et planifie le prochain scan dans 24h
 def _process_complet(surveil, new_rapport: dict, db):
     from app.application.services.tasks import _build_recommendations, _build_display_report
 
@@ -385,8 +395,12 @@ def _process_complet(surveil, new_rapport: dict, db):
     surveil.last_scan_at = datetime.utcnow()
     repo.marquer_scannee(surveil, prochaine_heures=24)
 
-# ─── TÂCHE BEAT : dispatcher uniquement ───────────────────────────────────────
-
+# ─── TÂCHE BEAT  ───────────────────────────────────────
+# Tourne selon le planning Celery Beat (ex: toutes les 24h)
+# Calcule un espacement entre les scans pour ne pas surcharger :
+#   > 20 URLs → 60s entre chaque
+#   > 10 URLs → 30s entre chaque
+#   sinon    → 15s entre chaque
 @shared_task(
     name="app.application.services.surveillance_task.scan_complet_toutes_urls"
 )

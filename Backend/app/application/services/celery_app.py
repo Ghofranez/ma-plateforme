@@ -1,5 +1,6 @@
 """
 celery_app.py — Configuration Celery + Beat schedule
+Il connecte l'application à Redis, enregistre toutes les tâches, et planifie les scans automatiques.
 """
 from celery import Celery
 from celery.schedules import crontab
@@ -7,11 +8,11 @@ from app.core.config import settings
 
 celery_app = Celery(
     "ma_plateforme",
-    broker  = settings.REDIS_URL,
-    backend = settings.REDIS_URL,
+    broker  = settings.REDIS_URL, # Redis reçoit les tâches à exécuter
+    backend = settings.REDIS_URL, # Redis stocke les résultats des tâches
     include = [
-        "app.application.services.tasks",
-        "app.application.services.surveillance_task",
+        "app.application.services.tasks",  # scan_url_task
+        "app.application.services.surveillance_task", # scan_une_url, uptime...
     ]
 )
 

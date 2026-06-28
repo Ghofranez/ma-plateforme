@@ -18,7 +18,11 @@ import concurrent.futures
 from app.core.entities.analysis import Analysis
 
 logger = logging.getLogger(__name__)
+# =============================================================================
+# Ces dictionnaires servent uniquement à l'affichage dans le rapport final.
+# =============================================================================
 
+# Icônes affichées devant chaque recommandation selon sa gravité
 SEVERITY_ICONS = {
     "Critique":  "",
     "Important": "",
@@ -29,6 +33,9 @@ SEVERITY_ICONS = {
     "Conseil":   "",
     "Alerte":    "",
 }
+
+# Libellés lisibles pour chaque section du rapport
+# La clé correspond à la clé interne, la valeur est le titre affiché à l'utilisateur
 
 SECTION_LABELS = {
     "headers":       "  Protection du navigateur",
@@ -42,11 +49,17 @@ SECTION_LABELS = {
     "nuclei":        "  Vulnérabilités ciblées (Nuclei)",
 }
 
+# Noms affichables pour les sources d'analyse SSL
+# Utilisé quand on indique quelle source a fourni le résultat SSL
+
 _SSL_SOURCE_NAMES = {
     "ssllabs":    "SSL Labs",
     "testssl":    "testssl.sh",
     "python_ssl": "analyse Python native",
 }
+
+# Traduction des codes ISO de pays en noms français
+# Utilisé pour afficher le pays d'hébergement du serveur (via urlscan/Shodan)
 
 _COUNTRY_NAMES = {
     "US": "États-Unis", "DE": "Allemagne",      "FR": "France",
@@ -59,7 +72,17 @@ _COUNTRY_NAMES = {
     "EG": "Égypte",     "SA": "Arabie Saoudite",
 }
 
+# Types d'erreurs pour lesquels on ne tente PAS de fallback SSL
+# Ex: "rate_limit" → SSL Labs a bloqué la requête, inutile de retenter avec testssl
 _NO_FALLBACK_ERROR_TYPES = {"rate_limit"}
+
+# =============================================================================
+# DICTIONNAIRES MÉTIER — Descriptions des problèmes de sécurité détectés
+# =============================================================================
+
+# Pour chaque en-tête HTTP de sécurité manquant, on définit :
+#   - la sévérité (Modéré / Important / Conseil)
+#   - une explication claire + une action concrète pour le développeur
 
 _HEADER_MEANINGS = {
     "X-Frame-Options": (
@@ -99,6 +122,12 @@ _HEADER_MEANINGS = {
     ),
 }
 
+
+# Pour chaque type de menace Google Safe Browsing, on définit :
+#   - la sévérité
+#   - lisible pour utilisateur("un logiciel malveillant", "du hameçonnage"…)
+#   - une explication + action concrète
+
 _THREAT_LABELS = {
     "MALWARE": (
         "Critique", "un logiciel malveillant",
@@ -122,6 +151,12 @@ _THREAT_LABELS = {
     ),
 }
 
+
+# Catalogue des ports réseau connus avec :
+#   - le nom du protocole (HTTP, FTP, SSH…)
+#   - une description courte
+#   - un booléen : True = port dangereux s'il est exposé sur Internet
+
 _PORT_CATALOG: dict[int, tuple[str, str, bool]] = {
     80:    ("HTTP",                     "Serveur web standard",                                    False),
     443:   ("HTTPS",                    "Serveur web sécurisé",                                    False),
@@ -139,6 +174,8 @@ _PORT_CATALOG: dict[int, tuple[str, str, bool]] = {
     3389:  ("Bureau à distance",        "Accès bureau distant — cible d'attaques par force brute",  True),
     2375:  ("API Docker non sécurisée", "Interface Docker sans sécurité",                           True),
 }
+
+# Explications spécifiques pour les technologies web à risque détectées par Wappalyzer
 
 _TECH_EXPLANATIONS: dict[str, str] = {
     "wordpress":     "WordPress est le CMS le plus ciblé au monde. "
@@ -164,6 +201,9 @@ _TECH_EXPLANATIONS: dict[str, str] = {
                      "Action : masquez la version PHP (expose_php = Off) et mettez à jour vers PHP 8.2 ou supérieur.",
 }
 
+# Table de correspondance entre les sévérités Nuclei (anglais) et les labels français + points de risque
+# Format : "sévérité_nuclei" → ("Label FR", points_de_risque_de_base)
+
 _NUCLEI_SEVERITY_MAP = {
     "critical": ("Critique",  40),
     "high":     ("Important", 20),
@@ -171,6 +211,11 @@ _NUCLEI_SEVERITY_MAP = {
     "low":      ("Conseil",    3),
     "info":     ("Info",       0),
 }
+
+# =============================================================================
+# FONCTIONS UTILITAIRES (helpers internes)
+# Ces fonctions sont appelées partout dans le code pour éviter la répétition.
+# =============================================================================
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -207,15 +252,24 @@ def _safe_scan(fn, *args, timeout=120) -> dict:
 
 
 def _scan_ssl_with_fallback(url: str) -> dict:
+
+    """
+    1.Essaie SSL Labs (API externe, résultats très détaillés, lent ~2-3min)
+    2. Si SSL Labs échoue (timeout, erreur réseau…), bascule sur testssl.sh
+     (outil local, résultats moins détaillés mais toujours utiles)
+
+    """
     result = _safe_scan(scan_ssl, url, timeout=300)
     if result.get("status") == "completed":
         result["_source"]       = "ssllabs"
         result["fallback_used"] = False
         return result
+    # Ne pas tenter le fallback pour certains types d'erreurs (ex: rate_limit)
     if result.get("error_type", "") in _NO_FALLBACK_ERROR_TYPES:
         result.setdefault("_source", "ssllabs")
         result["fallback_used"] = False
         return result
+    # SSL Labs a échoué → on tente testssl.sh comme plan B
     fallback = _safe_scan(scan_testssl, url, timeout=180)
     fallback["_source"]       = "testssl"
     fallback["fallback_used"] = True
@@ -223,20 +277,41 @@ def _scan_ssl_with_fallback(url: str) -> dict:
 
 
 def _port_info(port: int) -> tuple[str, str, bool]:
+    """
+    Retourne les informations d'un port depuis le catalogue.
+
+    Si le port n'est pas dans le catalogue, retourne des valeurs génériques.
+
+    Retourne : (nom_service, description, est_dangereux)
+    """
     return _PORT_CATALOG.get(port, ("Service", f"Port {port}", False))
 
+
+# =============================================================================
+# RÉSUMÉ TEMPS RÉEL PAR OUTIL
+# Génère un résumé court pour l'affichage de progression pendant le scan.
+# Ces résumés sont envoyés en temps réel au frontend via Celery PROGRESS.
+# =============================================================================
 
 # ─── Résumé temps réel par outil ─────────────────────────────────────────────
 
 def _summarize_tool_result(key: str, raw: dict) -> dict:
+    """
+    * Génère un résumé d'une ligne pour affichage en temps réel.
+
+    * Appelé dès qu'un outil termine son scan, pour mettre à jour
+    la barre de progression côté frontend sans attendre la fin de tous les outils.
+    """
     status  = raw.get("status", "completed")
     label   = SECTION_LABELS.get(key, key)
     summary = {"label": label, "status": status, "raw": raw, "detail": ""}
 
+    # Si l'outil a échoué, on affiche juste l'erreur
     if status == "failed":
         summary["detail"] = raw.get("error", "Erreur inconnue")[:100]
         return summary
 
+    # Résumé personnalisé pour chaque outil
     if key == "headers":
         grade   = raw.get("grade", "N/A")
         missing = len(raw.get("missing", []))
@@ -298,9 +373,10 @@ def _summarize_tool_result(key: str, raw: dict) -> dict:
 
     return summary
 
-
+# =============================================================================
 # ─── Builders recommandations ────────────────────────────────────────────────
-
+# Ces points sont ensuite additionnés pour former le score global (0-100).
+# =============================================================================
 def _build_headers_recs(h: dict, recs: list) -> int:
     risk = 0
     if h.get("status") == "failed":
@@ -323,18 +399,19 @@ def _build_headers_recs(h: dict, recs: list) -> int:
                  "Impossible de vérifier les protections de ce site — "
                  "il est peut-être hors ligne ou bloque les connexions automatiques.")
         return risk
-
+    # ── Analyse normale des résultats ──────────────────────────────────────
     grade   = h.get("grade", "F")
-    missing = h.get("missing", [])
-    present = h.get("present", [])
-    score   = h.get("score", "0/6")
+    missing = h.get("missing", [])# Liste des en-têtes absents
+    present = h.get("present", [])# Liste des en-têtes présents
+    score   = h.get("score", "0/6")# Score sous forme "X/6
 
+    # Tous les en-têtes sont présents → pas de risque
     if not missing:
         _add(recs, "OK",
              f"Toutes les protections du navigateur sont en place (grade {grade}, score {score}). "
              "Ce site applique les bonnes pratiques de sécurité.")
         return risk
-
+    # Calcul du risque selon le grade global
     if grade == "F":
         risk += 30
         _add(recs, "Critique",
@@ -352,7 +429,7 @@ def _build_headers_recs(h: dict, recs: list) -> int:
         _add(recs, "Modéré",
              f"Bonne protection globale (grade {grade}, score {score}), "
              f"mais {len(missing)} élément(s) à améliorer.")
-
+    # Détail par en-tête manquant : explication + action concrète
     for header in missing:
         if header in _HEADER_MEANINGS:
             severity, msg = _HEADER_MEANINGS[header]
@@ -364,18 +441,24 @@ def _build_headers_recs(h: dict, recs: list) -> int:
 
 
 def _build_ssl_recs(s: dict, recs: list) -> int:
+    """
+    Analyse le certificat SSL/TLS et génère les recommandations.
+    """
     risk     = 0
     source   = s.get("_source", "ssllabs")
     src_name = _SSL_SOURCE_NAMES.get(source, source)
 
+    # ── Cas d'erreur ───────────────────────────────────────────────────────
     if s.get("status") == "failed":
         error_type = s.get("error_type", "")
         error_msg  = (s.get("error") or "").lower()
         if error_type == "no_tls" or "http_no_tls" in error_msg:
+           # Cas le plus grave : le site ne supporte pas HTTPS du tout
             risk += 35
             _add(recs, "Critique",
                  "Ce site fonctionne en HTTP pur — aucun chiffrement actif. "
                  "Toutes les données échangées (mots de passe, formulaires) circulent en clair sur le réseau.")
+        # On fournit un guide en 3 étapes pour corriger ce problème fondamental
             _add(recs, "Conseil",
                  "Étape 1 — Obtenez un certificat SSL gratuit : rendez-vous sur letsencrypt.org "
                  "et suivez le guide Certbot adapté à votre serveur (Apache, Nginx…).")
@@ -413,9 +496,9 @@ def _build_ssl_recs(s: dict, recs: list) -> int:
     if s.get("status") != "completed":
         _add(recs, "Info", "Données SSL non disponibles.")
         return risk
-
+# ── Analyse du grade global SSL ────────────────────────────────────────
     grade_ssl = str(s.get("grade", "N/A")).upper()
-
+# Grade N/A : SSL Labs n'a pas pu attribuer de grade (configuration cassée)
     if grade_ssl == "N/A":
         endpoints = s.get("endpoints", [])
         if endpoints:
@@ -434,6 +517,7 @@ def _build_ssl_recs(s: dict, recs: list) -> int:
                      "Aucun protocole SSL/TLS sécurisé n'est supporté par ce serveur. "
                      "Action : activez TLS 1.2 et TLS 1.3 dans la configuration du serveur.")
             elif grade_ep == "T":
+               # Grade T = certificat non approuvé (ex: auto-signé)
                 risk += 25
                 _add(recs, "Critique",
                      "Le certificat SSL de ce serveur n'est pas approuvé (grade T). "
@@ -446,14 +530,21 @@ def _build_ssl_recs(s: dict, recs: list) -> int:
                      "Action : vérifiez la chaîne de certificats et la configuration TLS du serveur.")
         return risk
 
+    # Informe l'utilisateur si le fallback testssl a été utilisé
+
     if s.get("fallback_used"):
         _add(recs, "Info", f"Analyse de secours utilisée ({src_name}). Grade : {grade_ssl}")
+
+    # ── Analyse du certificat (validité, expiration) ───────────────────────
 
     cert = s.get("cert") or {}
     if not cert:
         _add(recs, "Info", "Aucune donnée certificat disponible.")
     else:
         if cert.get("verified") is False:
+
+          # Certificat auto-signé → les navigateurs affichent une alerte rouge
+
             risk += 30
             _add(recs, "Critique",
                  "Certificat invalide ou auto-signé — les navigateurs afficheront une alerte de sécurité. "
@@ -461,28 +552,33 @@ def _build_ssl_recs(s: dict, recs: list) -> int:
         days = cert.get("daysRemaining")
         if isinstance(days, int):
             if days < 0:
+             # Déjà expiré
                 risk += 25
                 _add(recs, "Critique",
                      f"Certificat SSL expiré depuis {abs(days)} jour(s) — le site est inaccessible en HTTPS sécurisé. "
                      "Action : renouvelez immédiatement le certificat.")
             elif days < 7:
+             # Expire dans moins d'une semaine → urgence maximale
                 risk += 15
                 _add(recs, "Critique",
                      f"Certificat SSL expire dans {days} jour(s) — urgence ! "
                      "Action : renouvelez le certificat immédiatement pour éviter une interruption de service.")
             elif days < 30:
+             # Expire dans moins d'un mois → planifier le renouvellement
                 risk += 8
                 _add(recs, "Important",
                      f"Certificat SSL expire dans {days} jour(s). "
                      "Action : planifiez le renouvellement dans les prochains jours.")
-
+    # ── CVEs (failles de sécurité connues dans OpenSSL) ───────────────────
     cves = s.get("cves") or []
     if cves:
-        risk += min(len(cves) * 8, 25)
-        for cve in cves[:3]:
+        risk += min(len(cves) * 8, 25) # +8 par CVE, plafonné à 25
+        for cve in cves[:3]:  # On n'affiche que les 3 premières CVEs
             _add(recs, "Critique",
                  f"{cve.get('id', 'CVE')} détecté : {cve.get('detail', '')} — "
                  "Action : mettez à jour OpenSSL et la configuration TLS du serveur.")
+
+    # ── Score de risque selon le grade SSL ────────────────────────────────
 
     if grade_ssl in ("F", "T"):
         risk += 35
@@ -511,11 +607,16 @@ def _build_ssl_recs(s: dict, recs: list) -> int:
     elif grade_ssl == "A+":
         _add(recs, "OK", "Chiffrement SSL exemplaire (grade A+). Félicitations !")
 
+    # ── Détection des suites de chiffrement faibles ───────────────────────
+    # On parcourt les suites TLS proposées par le serveur et on signale celles
+    # qui utilisent des algorithmes obsolètes (CBC, RC4, DES, NULL, EXPORT, anon)
+
     endpoints = s.get("endpoints", [])
     if endpoints:
         ep         = endpoints[0]
         details    = ep.get("details", {})
         raw_suites = details.get("suites", [])
+        # Les suites peuvent être groupées par protocole TLS → on les aplatit
         all_suites = []
         for suite_group in raw_suites:
             if isinstance(suite_group, dict) and "list" in suite_group:
@@ -532,7 +633,7 @@ def _build_ssl_recs(s: dict, recs: list) -> int:
                  f"{len(weak_suites)} suite(s) de chiffrement faible(s) détectée(s). "
                  "Action : désactivez les suites CBC, RC4, DES et EXPORT dans la configuration du serveur. "
                  "Privilégiez AES-GCM et ChaCha20.")
-            for suite in weak_suites[:5]:
+            for suite in weak_suites[:5]: # Affiche les 5 premières suites faibles
                 _add(recs, "Modéré", f"Suite faible : {suite['name']}.")
             if len(weak_suites) > 5:
                 _add(recs, "Info", f"… et {len(weak_suites) - 5} autre(s) suite(s) faible(s) à désactiver.")
@@ -540,7 +641,28 @@ def _build_ssl_recs(s: dict, recs: list) -> int:
 
 
 def _build_virustotal_recs(vt: dict, recs: list) -> int:
+
+    """
+    Analyse les résultats VirusTotal et génère les recommandations.
+
+    VirusTotal agrège les résultats de 70+ moteurs antivirus.
+    Le nombre de moteurs signalant le site comme malveillant détermine la gravité.
+
+    Barème de risque :
+        ≥10 antivirus alertent  → +45 (Critique)
+        ≥5 antivirus alertent   → +40 (Critique)
+        ≥2 antivirus alertent   → +25 (Important)
+        1 antivirus alerte      → +10 (Modéré, possible faux positif)
+        ≥5 suspects             → +15
+        ≥1 suspect              → +5
+        Phishing confirmé ≥2    → +45 (Critique)
+        Phishing 1 source       → +10
+    """
+
     risk = 0
+
+    # Cas où la clé API n'est pas configurée
+
     if vt.get("status") == "disabled":
         _add(recs, "Info", "La vérification antivirus (VirusTotal) n'est pas configurée.")
         return risk
@@ -556,6 +678,7 @@ def _build_virustotal_recs(vt: dict, recs: list) -> int:
     total      = vt.get("total",      0)
     permalink  = vt.get("permalink",  "")
 
+    # Seuils progressifs selon le nombre de détections
     if malicious >= 10:
         risk += 45
         _add(recs, "Critique",
@@ -573,6 +696,7 @@ def _build_virustotal_recs(vt: dict, recs: list) -> int:
              f"{malicious} antivirus signalent ce site comme malveillant. "
              "Soyez très prudent. Action : vérifiez le rapport VirusTotal et évitez de saisir des données sensibles.")
     elif malicious == 1:
+        # 1 seul antivirus → peut être un faux positif, on reste mesuré
         risk += 10
         _add(recs, "Modéré",
              f"1 antivirus sur {total} signale ce site. "
@@ -595,6 +719,7 @@ def _build_virustotal_recs(vt: dict, recs: list) -> int:
     if permalink:
         _add(recs, "Info", f"Rapport antivirus complet : {permalink}")
 
+    # Vérification supplémentaire : vote "phishing" dans les catégories VirusTotal
     categories = vt.get("categories", {})
     if categories:
         phishing_votes = sum(1 for cat in categories.values() if "phishing" in str(cat).lower())
@@ -613,6 +738,18 @@ def _build_virustotal_recs(vt: dict, recs: list) -> int:
 
 
 def _build_safe_browsing_recs(sb: dict, recs: list) -> int:
+    """
+    Analyse les résultats Google Safe Browsing et génère les recommandations.
+
+    Google Safe Browsing est la liste noire utilisée par Chrome, Firefox et Safari.
+    Si un site y figure, c'est une menace confirmée et très sérieuse.
+
+    Barème de risque :
+        MALWARE / SOCIAL_ENGINEERING → +45 (Critique)
+        UNWANTED_SOFTWARE / PHA      → +25 (Important)
+        Menace inconnue              → +35
+    """
+
     risk = 0
     if sb.get("status") == "disabled":
         _add(recs, "Info", "Google Safe Browsing n'est pas configuré.")
@@ -646,10 +783,31 @@ def _build_safe_browsing_recs(sb: dict, recs: list) -> int:
 
 
 def _build_urlscan_recs(us: dict, recs: list) -> int:
+    """
+    Analyse les résultats urlscan.io et génère les recommandations.
+
+    urlscan.io visite le site comme un vrai navigateur et enregistre :
+        - le comportement réseau (domaines contactés, requêtes…)
+        - le score de malveillance (0-100)
+        - les marques usurpées (phishing de marque)
+        - les informations du serveur (IP, pays, certificat)
+
+    Barème de risque :
+        Malveillant                  → +40
+        Score > 75                   → +25
+        Score > 50                   → +15
+        Score > 20                   → +5
+        > 30 domaines externes       → +5 (tracking intensif)
+        Certificat SSL expiré        → +20
+        Certificat expire < 7 jours  → +15
+        Certificat expire < 14 jours → +8
+    """
+
     risk = 0
     if us.get("skipped") or us.get("status") == "disabled":
         _add(recs, "Info", "L'analyse comportementale (urlscan.io) n'est pas configurée.")
         return risk
+    # ── Gestion des erreurs avec messages explicatifs ─────────────────────
 
     if us.get("status") == "failed" or (us.get("error") and not us.get("verdict")):
         error_type = us.get("error_type", "")
@@ -666,12 +824,13 @@ def _build_urlscan_recs(us: dict, recs: list) -> int:
             _add(recs, "Info", "L'analyse comportementale est en cours ou n'a pas abouti pour cette URL.")
             _add(recs, "Conseil", "Relancez l'analyse dans quelques instants, ou vérifiez directement sur urlscan.io.")
         return risk
-
+    # Analyse encore en cours (urlscan est asynchrone, ça peut prendre du temps)
     verdict = us.get("verdict")
     if not verdict:
         _add(recs, "Info", "L'analyse comportementale est en attente — urlscan.io traite encore le scan.")
         return risk
 
+    # ── Informations sur le serveur (IP, pays, certificat) ────────────────
     page = us.get("page", {})
     if page:
         domain         = page.get("domain",  "")
@@ -685,6 +844,7 @@ def _build_urlscan_recs(us: dict, recs: list) -> int:
         tls_warning    = page.get("tlsWarning", False)
         tls_expires_on = page.get("tlsExpiresOn", "")
 
+        # Construction d'une ligne d'information sur l'identité du serveur
         identity_parts = []
         if domain:       identity_parts.append(f"Domaine : {domain}")
         if ip:           identity_parts.append(f"IP : {ip}")
@@ -694,6 +854,7 @@ def _build_urlscan_recs(us: dict, recs: list) -> int:
         if identity_parts:
             _add(recs, "Info", "Informations identifiées — " + " | ".join(identity_parts) + ".")
 
+        # Alertes sur le certificat SSL relevées par urlscan
         if tls_expired:
             risk += 20
             _add(recs, "Critique",
@@ -716,14 +877,15 @@ def _build_urlscan_recs(us: dict, recs: list) -> int:
                  f"{'Date : ' + tls_expires_on + '. ' if tls_expires_on else ''}"
                  "Action : planifiez le renouvellement dans les prochains jours.")
 
+        # Alerte si le serveur est hébergé dans un pays à risque élevé
         if country in ("CN", "RU", "KP", "IR"):
             _add(recs, "Info",
                  f"Serveur hébergé en {country_name}. "
                  "Soyez vigilant si vous devez saisir des données personnelles.")
-
+     # ── Score de malveillance urlscan ─────────────────────────────────────
     score_us = verdict.get("score", 0)
-    brands   = verdict.get("brands", [])
-    tags     = verdict.get("tags",   [])
+    brands   = verdict.get("brands", [])# Marques imitées (phishing de marque)
+    tags     = verdict.get("tags",   [])# Étiquettes libres (ex: "phishing", "malware")
 
     if verdict.get("malicious"):
         risk += 40
@@ -754,6 +916,9 @@ def _build_urlscan_recs(us: dict, recs: list) -> int:
     if tags:
         _add(recs, "Info", f"Étiquettes urlscan.io : {', '.join(tags)}.")
 
+    # ── Activité réseau du site ────────────────────────────────────────────
+    # Un site qui contacte beaucoup de domaines externes = tracking intensif
+
     stats          = us.get("stats", {})
     domains_count  = stats.get("uniqueDomains", 0)
     requests_count = stats.get("requests",      0)
@@ -779,6 +944,24 @@ def _build_urlscan_recs(us: dict, recs: list) -> int:
 
 
 def _build_shodan_recs(sh: dict, recs: list) -> int:
+
+    """
+    Analyse les résultats Shodan et génère les recommandations.
+
+    Shodan est un moteur de recherche d'équipements connectés.
+    Il répertorie les ports ouverts, services et CVEs de chaque IP publique.
+
+    Barème de risque par port :
+        Critique (Redis, Docker, MongoDB, Elasticsearch…) → +12 chacun
+        Important (MySQL, RDP, FTP, SMB…)               → +8 chacun
+        Modéré (autres ports risqués)                    → +5 chacun
+
+    Barème CVEs :
+        Niveau "high"   → +30 (Critique)
+        Niveau "medium" → +15 (Important)
+    """
+
+
     risk = 0
     if sh.get("error") and sh.get("known") is not False:
         _add(recs, "Erreur", "Impossible de vérifier l'exposition du serveur (Shodan).")
@@ -800,6 +983,7 @@ def _build_shodan_recs(sh: dict, recs: list) -> int:
     if ip:   _add(recs, "Info", f"Adresse IP du serveur : {ip}.")
     if tags: _add(recs, "Info", f"Caractéristiques Shodan : {', '.join(tags)}.")
 
+    # ── Analyse des ports ouverts ─────────────────────────────────────────
     if open_ports:
         safe_ports = [p for p in open_ports if p not in risky_ports]
         if safe_ports:
@@ -823,6 +1007,8 @@ def _build_shodan_recs(sh: dict, recs: list) -> int:
     else:
         _add(recs, "Info", "Aucun port ouvert détecté par Shodan.")
 
+    # ── Analyse des CVEs connues sur le serveur ───────────────────────────
+
     if cves:
         if risk_level == "high":
             risk += 30
@@ -844,6 +1030,21 @@ def _build_shodan_recs(sh: dict, recs: list) -> int:
 
 
 def _build_wappalyzer_recs(wa: dict, recs: list) -> int:
+
+    """
+    Analyse les technologies détectées par Wappalyzer et génère les recommandations.
+
+    Wappalyzer identifie les CMS, frameworks, langages, CDN… utilisés par le site.
+    Les technologies risquées sont celles connues pour avoir des failles fréquentes
+    (WordPress, phpMyAdmin, jQuery ancien, AngularJS fin de vie…).
+
+    Barème de risque :
+        Technologie à risque élevé  → +12 chacune
+        Technologie à risque moyen  → +6 chacune
+        phpMyAdmin public           → +20 (critique)
+    """
+
+
     risk = 0
     if wa.get("status") == "failed":
         error = wa.get("error", "")
@@ -924,10 +1125,30 @@ def _build_wappalyzer_recs(wa: dict, recs: list) -> int:
 
 
 def _build_zap_recs(zap: dict, recs: list) -> int:
+
+    """
+    Analyse les résultats OWASP ZAP et génère les recommandations.
+
+    OWASP ZAP est un scanner actif de vulnérabilités web.
+    Il explore le site et teste les pages contre les failles OWASP Top 10
+    (XSS, injection SQL, CSRF, en-têtes manquants, configurations dangereuses…).
+
+    Barème de risque :
+        Alertes critiques (High)   → +20 par alerte, max +40
+        Alertes importantes (Med)  → +10 par alerte, max +25
+        Alertes mineures (Low)     → +3 par alerte, max +10
+
+    Pour chaque alerte, le code tente de trouver une explication en français
+    dans _ZAP_ALERT_EXPLANATIONS, sinon utilise la traduction automatique.
+    """
+
+
     risk = 0
     if not zap or zap.get("status") == "disabled":
         _add(recs, "Info", "L'analyse OWASP ZAP n'est pas configurée.")
         return risk
+
+    # ── Gestion des erreurs spécifiques à ZAP ─────────────────────────────
 
     if zap.get("status") == "failed":
         error_type = zap.get("error_type", "")
@@ -952,6 +1173,8 @@ def _build_zap_recs(zap: dict, recs: list) -> int:
         _add(recs, "Info", "Données OWASP ZAP non disponibles.")
         return risk
 
+    # ── Lecture des compteurs d'alertes ───────────────────────────────────
+
     alerts  = zap.get("alerts", {})
     counts  = alerts.get("counts", {})
     by_risk = alerts.get("by_risk", {})
@@ -969,6 +1192,8 @@ def _build_zap_recs(zap: dict, recs: list) -> int:
         _add(recs, "OK", "OWASP ZAP n'a détecté aucune vulnérabilité web connue sur ce site.")
         return risk
 
+    # Résumé global + calcul de risque selon le niveau le plus grave
+
     if high > 0:
         risk += min(high * 20, 40)
         _add(recs, "Critique",
@@ -985,13 +1210,18 @@ def _build_zap_recs(zap: dict, recs: list) -> int:
              f"OWASP ZAP a détecté {low} vulnérabilité(s) mineure(s) — "
              "risque faible mais des améliorations sont possibles.")
 
+    # ── Détail des alertes par niveau de sévérité ─────────────────────────
+
     for zap_risk, severity in [("High", "Critique"), ("Medium", "Important"), ("Low", "Modéré")]:
         alert_list = by_risk.get(zap_risk, [])
-        for alert in alert_list[:5]:
+        for alert in alert_list[:5]: # On limite à 5 alertes par niveau pour ne pas surcharger
             name_original   = alert.get("name_original", alert.get("name", ""))
             name_translated = alert.get("name", "")
             cweid           = alert.get("cweid", "")
             cwe_str         = f" (CWE-{cweid})" if cweid and cweid != "0" else ""
+
+            # On cherche d'abord une explication curatée dans notre dictionnaire
+
             explanation     = None
             for key, val in _ZAP_ALERT_EXPLANATIONS.items():
                 if key.lower() in name_original.lower() or key.lower() in name_translated.lower():
@@ -1000,6 +1230,9 @@ def _build_zap_recs(zap: dict, recs: list) -> int:
             if explanation:
                 _add(recs, severity, f"« {name_translated} »{cwe_str} — {explanation}")
             else:
+
+                # Pas d'explication curatée → on utilise la traduction automatique + solution ZAP
+
                 name_auto         = _translate(name_original)
                 solution_original = alert.get("solution_original", alert.get("solution", ""))
                 solution_auto     = _translate(solution_original) if solution_original else ""
@@ -1016,10 +1249,28 @@ def _build_zap_recs(zap: dict, recs: list) -> int:
 
 
 def _build_nuclei_recs(nu: dict, recs: list) -> int:
+
+    """
+    Analyse les résultats Nuclei et génère les recommandations.
+
+    Nuclei est un scanner de vulnérabilités basé sur des templates YAML communautaires.
+    Il teste des milliers de CVEs, misconfigurations et expositions connues.
+    C'est le scan le plus approfondi et le plus long (jusqu'à 8 minutes).
+
+    Barème de risque :
+        Critique → +40 par finding, max +50
+        Haute    → +20 par finding, max +40
+        Moyenne  → +10 par finding, max +25
+        Faible   → +3 par finding,  max +10
+    """
+
+
     risk = 0
     if not nu or nu.get("status") == "disabled":
         _add(recs, "Info", "L'analyse Nuclei n'est pas configurée.")
         return risk
+
+    # ── Gestion des erreurs spécifiques à Nuclei ──────────────────────────
 
     if nu.get("status") == "failed":
         error_type = nu.get("error_type", "")
@@ -1046,10 +1297,12 @@ def _build_nuclei_recs(nu: dict, recs: list) -> int:
         _add(recs, "Info", "Données Nuclei non disponibles.")
         return risk
 
-    findings = nu.get("findings", [])
-    counts   = nu.get("counts",   {})
+    findings = nu.get("findings", []) # Liste des vulnérabilités trouvées
+    counts   = nu.get("counts",   {}) # Compteurs par sévérité
     total    = nu.get("total",    0)
-    partial  = nu.get("partial",  False)
+    partial  = nu.get("partial",  False) # True si le scan s'est terminé avant la fin
+
+# Avertit l'utilisateur que les résultats sont partiels si le scan a été interrompu
 
     if partial:
         _add(recs, "Info",
@@ -1068,8 +1321,10 @@ def _build_nuclei_recs(nu: dict, recs: list) -> int:
     medium   = counts.get("medium",   0)
     low      = counts.get("low",      0)
 
+    # Résumé global selon le niveau le plus grave
+
     if critical > 0:
-        risk += min(critical * 40, 50)
+        risk += min(critical * 40, 50) # Plafonné à 50
         _add(recs, "Critique",
              f"Nuclei a détecté {critical} vulnérabilité(s) CRITIQUE(S) nécessitant une correction immédiate. "
              f"Bilan complet : {high} haute(s), {medium} moyenne(s), {low} faible(s).")
@@ -1083,6 +1338,8 @@ def _build_nuclei_recs(nu: dict, recs: list) -> int:
         risk += min(low * 3, 10)
         _add(recs, "Conseil", f"Nuclei a détecté {low} point(s) d'amélioration mineurs.")
 
+    # ── Détail par finding, groupé par sévérité ───────────────────────────
+
     for sev_key in ("critical", "high", "medium", "low"):
         severity_label, _ = _NUCLEI_SEVERITY_MAP[sev_key]
         sev_findings      = [f for f in findings if f.get("severity") == sev_key]
@@ -1090,12 +1347,14 @@ def _build_nuclei_recs(nu: dict, recs: list) -> int:
         for finding in sev_findings:
             name        = finding.get("name_fr") or finding.get("name", "Vulnérabilité inconnue")
             description = finding.get("description", "")
-            matched_at  = finding.get("matched_at",  "")
+            matched_at  = finding.get("matched_at",  "") # URL ou paramètre exact où la faille a été trouvée
             cve_ids     = finding.get("cve_id",      [])
             cvss        = finding.get("cvss_score")
             if name in seen_names:
                 continue
             seen_names.add(name)
+
+            # Construction du message de recommandation multi-parties
             parts = [f"« {name} »"]
             if cve_ids:  parts.append(f"CVE : {', '.join(cve_ids)}")
             if cvss:     parts.append(f"Score CVSS : {cvss}")
@@ -1104,6 +1363,10 @@ def _build_nuclei_recs(nu: dict, recs: list) -> int:
             desc_short = (description[:200] + "…") if len(description) > 200 else description
             parts.append(f"➜ {desc_short or 'Consultez la documentation du modèle Nuclei pour corriger ce problème.'}")
             _add(recs, severity_label, " | ".join(parts))
+
+    # ── Findings informatifs (sévérité "info") ────────────────────────────
+    # Ces findings ne sont pas des failles mais des informations utiles sur le site
+
 
     info_findings = [f for f in findings if f.get("severity") == "info"]
     if info_findings:
@@ -1123,15 +1386,31 @@ def _build_nuclei_recs(nu: dict, recs: list) -> int:
             _add(recs, "Info", " | ".join(parts))
     return risk
 
+# =============================================================================
+# ORCHESTRATEUR DES RECOMMANDATIONS
+# Appelle toutes les fonctions _build_XXX_recs() et accumule le score de risque.
+# =============================================================================
+
 
 # ─── Orchestrateur ───────────────────────────────────────────────────────────
 
 def _build_recommendations(report: dict) -> tuple[dict, int]:
+
+    """
+    Génère toutes les recommandations et calcule le score de risque global.
+
+    Appelle séquentiellement chaque builder et additionne les points de risque.
+    Le score est plafonné à 100 pour rester dans une plage lisible.
+
+    """
+
     risk_score      = 0
     recommendations = {
         "headers": [], "ssl": [], "virustotal": [], "safe_browsing": [],
         "urlscan": [], "shodan": [], "wappalyzer": [], "zap": [], "nuclei": [],
     }
+
+    # Chaque builder retourne les points de risque de sa section
     risk_score += _build_headers_recs      (report.get("headers",       {}), recommendations["headers"])
     risk_score += _build_ssl_recs          (report.get("ssl",           {}), recommendations["ssl"])
     risk_score += _build_virustotal_recs   (report.get("virustotal",    {}), recommendations["virustotal"])
@@ -1145,7 +1424,11 @@ def _build_recommendations(report: dict) -> tuple[dict, int]:
 
 
 def _build_display_report(report: dict, recommendations: dict, risk_score: int) -> dict:
+    """
+     Construit le rapport d'affichage final (structure envoyée au frontend).
+    """
     def _level(score: int) -> dict:
+        """Convertit un score numérique en label + couleur + emoji."""
         if score >= 70: return {"label": "Élevé",   "color": "red",    "emoji": "🔴"}
         if score >= 40: return {"label": "Modéré",  "color": "orange", "emoji": "🟠"}
         if score >= 15: return {"label": "Faible",  "color": "yellow", "emoji": "🟡"}
@@ -1156,6 +1439,7 @@ def _build_display_report(report: dict, recommendations: dict, risk_score: int) 
     for key, msgs in recommendations.items():
         label     = SECTION_LABELS.get(key, key)
         formatted = [_format_recommendation(m) for m in msgs]
+        # Détermine la couleur de la section selon la sévérité la plus haute présente
         all_tags  = [_severity_from_tag(m) for m in msgs]
         if "Critique" in all_tags:                             section_status = "danger"
         elif "Important" in all_tags or "Alerte" in all_tags:  section_status = "warning"
@@ -1173,6 +1457,13 @@ def _build_display_report(report: dict, recommendations: dict, risk_score: int) 
 
 
 def _build_summary(risk_score: int, recommendations: dict) -> str:
+    """
+    Génère une phrase de résumé adaptée au niveau de risque.
+
+    Compte les problèmes critiques et importants pour personnaliser le message.
+    Ce texte est affiché en haut du rapport comme conclusion principale.
+    """
+
     critiques  = sum(1 for msgs in recommendations.values() for m in msgs if "[Critique]"  in m)
     importants = sum(1 for msgs in recommendations.values() for m in msgs if "[Important]" in m)
     if risk_score >= 70:
@@ -1187,9 +1478,18 @@ def _build_summary(risk_score: int, recommendations: dict) -> str:
     return ("Ce site ne présente aucun problème de sécurité connu. Vous pouvez l'utiliser en toute confiance.")
 
 
-# ─── Tâche Celery ────────────────────────────────────────────────────────────
+# =============================================================================
+# GESTION DES ERREURS CRITIQUES
+# =============================================================================
 
 def _mark_analysis_failed(task_reference: str, user_id: int, url: str, error_message: str) -> None:
+    """
+    Marque une analyse comme échouée en base de données.
+
+    Appelé quand la tâche Celery plante avant de pouvoir sauvegarder un résultat.
+
+    """
+
     db = SessionLocal()
     try:
         existing = db.query(Analysis).filter(
@@ -1215,7 +1515,13 @@ def _mark_analysis_failed(task_reference: str, user_id: int, url: str, error_mes
     except Exception:
         logger.error("Impossible de marquer l'analyse comme échouée en base", exc_info=True)
     finally:
-        db.close()
+        db.close() # Toujours fermer la connexion, même en cas d'exception
+
+# =============================================================================
+# TÂCHE CELERY PRINCIPALE
+# Point d'entrée de tout le système de scan.
+# =============================================================================
+
 
 @celery_app.task(
     bind=True,
@@ -1226,6 +1532,11 @@ def _mark_analysis_failed(task_reference: str, user_id: int, url: str, error_mes
 
 def scan_url_task(self, url: str, user_id: int, surveillance_id: int = None):
 
+    """
+    Tâche Celery principale : orchestre l'analyse complète d'une URL.
+    """
+
+    # ── Définition des outils avec leurs timeouts individuels ─────────────
     OUTILS = [
         ("headers",       "Protection du navigateur",        lambda: _safe_scan(scan_headers,           url, timeout=30)),
         ("ssl",           "Chiffrement HTTPS",               lambda: _scan_ssl_with_fallback(url)),
@@ -1238,14 +1549,16 @@ def scan_url_task(self, url: str, user_id: int, surveillance_id: int = None):
         ("nuclei",        "Vulnérabilités Nuclei",           lambda: _safe_scan(scan_nuclei,            url, timeout=480)),
     ]
 
-    raw_results  = {}
+    raw_results  = {} # Résultats bruts accumulés au fil des completions
     total_outils = len(OUTILS)
 
+    # État initial : tous les outils sont "en attente"
     partial_results = {
         key: {"label": SECTION_LABELS.get(key, key), "status": "pending", "detail": "En attente...", "raw": {}}
         for key, label, _ in OUTILS
     }
 
+    # Envoi de l'état initial au frontend (barre de progression à 5%)
     self.update_state(
         state="PROGRESS",
         meta={
@@ -1258,6 +1571,8 @@ def scan_url_task(self, url: str, user_id: int, surveillance_id: int = None):
     try:
         completed_count = 0
         try:
+            # ── Lancement parallèle de tous les outils ────────────────────
+            # (le premier outil terminé est traité en premier, pas dans l'ordre de la liste).
             with concurrent.futures.ThreadPoolExecutor(max_workers=total_outils) as executor:
                 future_to_info = {executor.submit(fn): (key, label) for key, label, fn in OUTILS}
 
@@ -1274,6 +1589,7 @@ def scan_url_task(self, url: str, user_id: int, surveillance_id: int = None):
                     raw_results[key]     = raw
                     partial_results[key] = _summarize_tool_result(key, raw)
 
+
                     self.update_state(
                         state="PROGRESS",
                         meta={
@@ -1289,17 +1605,18 @@ def scan_url_task(self, url: str, user_id: int, surveillance_id: int = None):
                 if key not in raw_results:
                     raw_results[key]     = {"status": "failed", "error": "timeout global", "error_type": "timeout"}
                     partial_results[key] = _summarize_tool_result(key, raw_results[key])
-
+        # ── Phase de synthèse ─────────────────────────────────────────────
         self.update_state(
             state="PROGRESS",
             meta={"status": "Calcul du score de risque...", "progress": 88,
                   "current_tool": None, "current_label": None, "partial_results": partial_results}
         )
-
+        # Génération des recommandations et du score
         recommendations, risk_score = _build_recommendations(raw_results)
         display_report              = _build_display_report(raw_results, recommendations, risk_score)
         all_recs_flat               = [rec for section in recommendations.values() for rec in section]
 
+        # Rapport complet : résultats bruts + score + recommandations + rapport affichage
         full_report = {
             **raw_results,
             "risk_score":      risk_score,
@@ -1313,6 +1630,7 @@ def scan_url_task(self, url: str, user_id: int, surveillance_id: int = None):
                   "current_tool": None, "current_label": None, "partial_results": partial_results}
         )
 
+        # ── Sauvegarde en base de données ─────────────────────────────────
         db = SessionLocal()
         try:
             existing = db.query(Analysis).filter(
@@ -1327,6 +1645,7 @@ def scan_url_task(self, url: str, user_id: int, surveillance_id: int = None):
             }
 
             if existing:
+                # Mise à jour de l'analyse existante
                 existing.status          = "completed"
                 existing.full_report     = full_report
                 existing.summary         = summary_data

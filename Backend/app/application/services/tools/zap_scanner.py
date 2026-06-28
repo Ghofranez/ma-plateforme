@@ -1,6 +1,7 @@
 """
 zap_scanner.py — Scanner OWASP ZAP via API REST
 Mode : spider léger + scan passif (safe, lecture seule)
+ZAP attaque le site comme un hacker le ferait depuis le navigateur.
 """
 
 import os
@@ -11,8 +12,8 @@ from deep_translator import GoogleTranslator
 ZAP_BASE_URL = os.getenv("ZAP_BASE_URL", "http://zap:8090")
 ZAP_API_KEY  = os.getenv("ZAP_API_KEY",  "")
 
-SPIDER_TIMEOUT_S  = 120
-PASSIVE_TIMEOUT_S = 120
+SPIDER_TIMEOUT_S  = 180
+PASSIVE_TIMEOUT_S = 180
 POLL_INTERVAL_S   = 5
 
 # Alertes redondantes avec vos autres scanners — ignorées pour éviter les doublons
@@ -523,7 +524,7 @@ def run_zap_scan(url: str) -> dict:
         # ── 2. Spider (crawl léger, max 5 sous-pages) ──
         spider_resp = _zap_get(
             "/JSON/spider/action/scan/",
-            {"url": url, "maxChildren": "5", "recurse": "true"},
+            {"url": url, "maxChildren": "2", "recurse": "true"},
         )
         scan_id = spider_resp.get("scan")
         if not scan_id:

@@ -193,7 +193,7 @@ services:
       - "${FRONTEND_PORT}:80"
       - "${FRONTEND_HTTPS_PORT}:443"
     healthcheck:
-      test: ["CMD", "wget", "--no-check-certificate", "-qO-", "https://localhost/"]
+      test: ["CMD", "curl", "-fk", "https://localhost/"]
       interval: 30s
       timeout:  5s
       retries:  3
@@ -225,7 +225,7 @@ services:
     ports:
       - "${ZAP_PORT}:8090"
     networks:
-      - internal
+      - external
     restart: unless-stopped
     tmpfs:
       - /zap/wrk:rw

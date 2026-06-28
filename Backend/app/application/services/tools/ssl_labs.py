@@ -1,5 +1,5 @@
 """
-tools/ssl.py — Analyse SSL via SSL Labs API v3
+tools/ssl.py — Analyse SSL via SSL Labs API v4
 """
 
 import time
@@ -7,7 +7,7 @@ import datetime
 import requests
 from urllib.parse import urlparse
 
-SSL_LABS_API = "https://api.ssllabs.com/api/v3/analyze"
+SSL_LABS_API = "https://api.ssllabs.com/api/v4/analyze"
 
 
 def scan_ssl(url: str) -> dict:
@@ -31,7 +31,7 @@ def scan_ssl(url: str) -> dict:
         # Lancer le scan
         requests.get(
             SSL_LABS_API,
-            params={"host": host, "startNew": "on", "all": "done"},
+            params={"host": host, "startNew": "true", "all": "done"},
             timeout=120,
         )
 
@@ -64,7 +64,7 @@ def scan_ssl(url: str) -> dict:
 
                 # ── Certificat ──────────────────────────────────────────────
                 cert_raw      = details.get("cert") or {}
-                not_after     = cert_raw.get("notAfter")       
+                not_after     = cert_raw.get("notAfter")
                 days_remaining = None
                 expiry_str    = None
                 issuer        = None

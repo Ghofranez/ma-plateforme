@@ -1,5 +1,13 @@
 """
-nuclei_scanner.py — Scan de vulnérabilités avec Nuclei (version adaptive)
+nuclei_scanner.py — Scan de vulnérabilités avec
+(configrration du serveur)
+
+Nuclei cherche les portes mal fermées d'un site web :
+   -fichiers secrets accessibles
+   -interfaces d'administration sans protection
+   -failles connues non corrigées
+   -services accessibles sans mot de passe
+=> d'apres des templates de détection
 """
 
 import subprocess

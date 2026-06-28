@@ -17,6 +17,8 @@ from app.application.services.tools.zap_scanner      import run_zap_scan
 from app.application.services.tools.nuclei_scanner   import scan_nuclei
 
 
+# Convertit l'URL en adresse IP pour Shodan
+# Shodan travaille sur les IPs, pas les noms de domaine
 def _resolve_ip(url: str) -> str | None:
     try:
         from urllib.parse import urlparse
@@ -25,7 +27,8 @@ def _resolve_ip(url: str) -> str | None:
     except Exception:
         return None
 
-
+# Pare-feu universel — isole chaque outil pour qu'une erreur
+# ne fasse pas planter tout le pipeline
 def _safe_run(fn, *args):
     try:
         return fn(*args)
@@ -35,7 +38,10 @@ def _safe_run(fn, *args):
 
 _NO_FALLBACK_ERROR_TYPES = {"rate_limit", "timeout", "network"}
 
-
+# Stratégie en 2 temps :
+#   1. SSL Labs (résultats détaillés, lent)
+#   2. testssl.sh si SSL Labs échoue (résultats basiques, local)
+# Exception : pas de fallback si l'erreur est rate_limit/timeout/network
 def _scan_ssl_with_fallback(url: str) -> dict:
     result = _safe_run(scan_ssl, url)
 
@@ -59,6 +65,8 @@ def run_full_scan(url: str) -> dict:
     ip     = _resolve_ip(url)
     report = {"url": url, "status": "completed"}
 
+    # Chaque tuple = (clé_résultat, fonction_scan, argument)
+    # La clé devient la clé dans le dict report final
     tasks = [
         ("headers",       scan_headers,          url),
         ("virustotal",    scan_virustotal,        url),
@@ -70,7 +78,8 @@ def run_full_scan(url: str) -> dict:
         ("nuclei",        scan_nuclei,            url),
     ]
 
-    # Timeouts individuels par outil
+    # Chaque outil a son propre délai maximum selon sa vitesse habituelle
+    # Nuclei (420s) et ZAP (180s) sont les plus lents car ils font des tests actifs
     TIMEOUTS = {
         "headers":       30,
         "virustotal":    60,
@@ -83,6 +92,9 @@ def run_full_scan(url: str) -> dict:
         "ssl":           300,
     }
 
+    # ThreadPoolExecutor lance tous les outils simultanément
+    # SSL est soumis séparément car il utilise _scan_ssl_with_fallback
+    # et non _safe_run comme les autres
     executor = concurrent.futures.ThreadPoolExecutor(max_workers=len(tasks) + 1)
     try:
         ssl_future     = executor.submit(_scan_ssl_with_fallback, url)
@@ -120,6 +132,8 @@ def run_full_scan(url: str) -> dict:
                         }
                         future.cancel()
 
+    # Libère le pool de threads dans tous les cas (succès ou erreur)
+    # cancel_futures=True annule les tâches en attente non démarrées
     finally:
         executor.shutdown(wait=False, cancel_futures=True)
 
