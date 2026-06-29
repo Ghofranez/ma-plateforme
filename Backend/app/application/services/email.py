@@ -420,3 +420,61 @@ def send_email_change_confirmation(old_email: str, new_email: str, token: str):
     msg["Subject"] = "Confirmation de changement d'email"
     msg.attach(MIMEText(body, "html"))
     _send(msg, old_email)
+
+  # ─── Notification changement mot de passe ────────────────────────────────────
+
+def send_password_changed_notification(email: str):
+
+    body = f"""
+    <div style="font-family:Arial,sans-serif;max-width:500px;margin:auto;
+                border:1px solide #eee;border-radius:10px;overflow:hidden;">
+
+      <div style="background:#1e3a5f;padding:24px;color:white;">
+        <h2 style="margin:0;font-size:20px;">
+            Mot de passe modifié
+        </h2>
+      </div>
+
+
+      <div style="padding:24px;">
+
+        <p style="color:#374151;font-size:14px;">
+            Votre mot de passe a été modifié avec succès.
+        </p>
+
+        <div style="margin-top:20px;padding:15px;background:#f0fdf4;
+                    border-left:4px solide #16a34a;border-radius:4px;">
+          <p style="margin:0;color:#166534;font-size:13px;">
+            Si vous êtes à l'origine de cette modification,
+            aucune action n'est nécessaire.
+          </p>
+        </div>
+
+
+        <div style="margin-top:20px;padding:15px;background:#fef3c7;
+                    border-left:4px solide #f59e0b;border-radius:4px;">
+          <p style="margin:0;color:#92400e;font-size:13px;">
+            Si vous n'avez pas changé votre mot de passe,
+            contactez immédiatement l'administrateur.
+          </p>
+        </div>
+
+      </div>
+
+
+      <div style="padding:14px 24px;background:#f9fafb;
+                  text-align:center;color:#9ca3af;font-size:12px;">
+        Plateforme de sécurité
+      </div>
+
+    </div>
+    """
+
+    msg = MIMEMultipart()
+    msg["From"] = settings.SMTP_EMAIL
+    msg["To"] = email
+    msg["Subject"] = "Votre mot de passe a été modifié"
+
+    msg.attach(MIMEText(body, "html"))
+
+    _send(msg, email)
